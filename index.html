@@ -7,18 +7,21 @@
   <style>
     body{
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      max-width: 560px;
+      max-width: 640px;
       margin: 22px auto;
       padding: 0 14px;
       line-height: 1.6;
     }
     h1{ font-size: 22px; text-align:center; margin: 8px 0 14px; }
+
     .card{
       background:#f5f5f7;
       border:1px solid #e5e5ea;
       border-radius:14px;
       padding:14px;
+      margin-bottom: 12px;
     }
+
     label{ display:block; margin-top:10px; font-size:14px; }
     input{
       width:100%;
@@ -28,6 +31,7 @@
       border-radius:12px;
       font-size:16px;
       box-sizing:border-box;
+      background:#fff;
     }
     .row{ display:flex; gap:10px; }
     .row > div{ flex:1; }
@@ -42,6 +46,10 @@
     }
     .primary{ background:#007aff; color:#fff; }
     .secondary{ background:#111; color:#fff; }
+    .ghost{ background:#fff; border:1px solid #d1d1d6; }
+
+    .btnRow{ display:flex; gap:10px; margin-top:12px; }
+    .btnRow button{ margin-top:0; width:100%; }
 
     .result{
       margin-top:14px;
@@ -50,18 +58,84 @@
       border:1px solid #e5e5ea;
       border-radius:14px;
       padding:12px;
+      user-select:text;
+      -webkit-user-select:text;
     }
     .hint{
       font-size:12px;
       color:#666;
       margin-top:8px;
     }
+
+    .sectionTitle{
+      font-size:15px;
+      font-weight:700;
+      margin: 2px 0 8px;
+    }
+
+    .historyList{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top:10px;
+    }
+    .historyItem{
+      background:#fff;
+      border:1px solid #e5e5ea;
+      border-radius:14px;
+      padding:12px;
+    }
+    .historyTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:8px;
+    }
+    .tag{
+      font-size:12px;
+      color:#444;
+      background:#f2f2f7;
+      border:1px solid #e5e5ea;
+      padding:4px 8px;
+      border-radius:999px;
+      display:inline-block;
+      max-width: 70%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .miniBtn{
+      font-size:13px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid #d1d1d6;
+      background:#fff;
+      width:auto;
+      margin:0;
+    }
+    .miniRow{
+      display:flex;
+      gap:8px;
+      justify-content:flex-end;
+      margin-top:10px;
+      flex-wrap:wrap;
+    }
+    .muted{ color:#777; font-size:12px; }
   </style>
 </head>
+
 <body>
   <h1>낙지잡이</h1>
 
   <div class="card">
+    <div class="row">
+      <div>
+        <label>정산 메모(선택)</label>
+        <input type="text" id="memo" placeholder="예: 12/30 여수 1차" />
+      </div>
+    </div>
+
     <div class="row">
       <div>
         <label>낙지 (kg)</label>
@@ -96,15 +170,36 @@
     </div>
 
     <button class="primary" id="calcBtn">계산하기</button>
-    <button class="secondary" id="copyBtn">카톡으로 보내기(복사)</button>
+
+    <div class="btnRow">
+      <button class="secondary" id="copyBtn">카톡으로 보내기(복사)</button>
+      <button class="ghost" id="saveBtn">이 정산 저장</button>
+    </div>
 
     <div class="result" id="result">값 입력 → 계산하기</div>
-    <div class="hint">카톡 버튼은 정산문을 클립보드에 복사해줘. 카톡에서 붙여넣기만 하면 돼.</div>
+    <div class="hint">복사 버튼은 정산문을 클립보드에 복사해줘. 카톡에서 붙여넣기만 하면 돼.</div>
+  </div>
+
+  <div class="card">
+    <div class="historyTop">
+      <div>
+        <div class="sectionTitle">저장된 정산</div>
+        <div class="muted">※ 이 폰/브라우저에만 저장돼. (다른 폰으로는 자동 이동 안 됨)</div>
+      </div>
+      <button class="miniBtn" id="clearAllBtn">전체 삭제</button>
+    </div>
+
+    <div class="historyList" id="historyList">
+      <div class="muted">아직 저장된 정산이 없어.</div>
+    </div>
   </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
+
+    const STORAGE_KEY = "nakji_settlements_v1";
     let kakaoText = "";
+    let lastCalc = null;
 
     function n(v){
       const num = Number(v);
@@ -113,33 +208,25 @@
     function won(x){
       return Math.round(x).toLocaleString("ko-KR") + "원";
     }
+    function nowLabel(){
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      const hh = String(d.getHours()).padStart(2,"0");
+      const mi = String(d.getMinutes()).padStart(2,"0");
+      return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+    }
 
-    function calculate(){
-      const kg = n($("kg").value);
-      const price = n($("price").value);
-      const box = n($("box").value);
-      const fuel = n($("fuel").value);
-      const food = n($("food").value);
+    function buildText(calc){
+      const { kg, price, box, fuel, food, divideBy, boxUnit, feeRate,
+              nakjiTotal, boxCost, coopFee, totalCost, finalTotal, perShare, memo, createdAt } = calc;
 
-      const divideBy = n($("divideBy").value) || 1;
+      const memoLine = memo ? `메모: ${memo}\n` : "";
+      const timeLine = createdAt ? `시간: ${createdAt}\n` : "";
 
-      // 고정값
-      const boxUnit = 60000;      // 입감 박스 단가
-      const feeRate = 0.05;       // 수협수수료 5%
-
-      const nakjiTotal = kg * price;
-
-      const boxCost = box * boxUnit;
-      const coopFee = nakjiTotal * feeRate;
-
-      const totalCost = boxCost + fuel + coopFee + food;
-      const finalTotal = nakjiTotal - totalCost;
-      const perShare = finalTotal / divideBy;
-
-      // 화면/카톡용 문장
-      kakaoText =
-`[낙지잡이 정산]
-
+      return `[낙지잡이 정산]
+${timeLine}${memoLine}
 낙지: ${kg}kg × ${price.toLocaleString("ko-KR")}원 = ${won(nakjiTotal)}
 
 [경비]
@@ -150,7 +237,40 @@
 
 최종합계: 낙지총합 - 경비(입감+기름값+수협수수료+부식) = ${won(finalTotal)}
 최종합계 나누기 ${divideBy} = ${won(perShare)}`;
+    }
 
+    function calculate(){
+      const memo = $("memo").value.trim();
+
+      const kg = n($("kg").value);
+      const price = n($("price").value);
+      const box = n($("box").value);
+      const fuel = n($("fuel").value);
+      const food = n($("food").value);
+      const divideBy = n($("divideBy").value) || 1;
+
+      // 고정값
+      const boxUnit = 60000;
+      const feeRate = 0.05;
+
+      const nakjiTotal = kg * price;
+      const boxCost = box * boxUnit;
+      const coopFee = nakjiTotal * feeRate;
+
+      const totalCost = boxCost + fuel + coopFee + food;
+      const finalTotal = nakjiTotal - totalCost;
+      const perShare = finalTotal / divideBy;
+
+      lastCalc = {
+        id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2),
+        createdAt: nowLabel(),
+        memo,
+        kg, price, box, fuel, food, divideBy,
+        boxUnit, feeRate,
+        nakjiTotal, boxCost, coopFee, totalCost, finalTotal, perShare
+      };
+
+      kakaoText = buildText(lastCalc);
       $("result").innerText = kakaoText;
     }
 
@@ -168,12 +288,141 @@
       }
     }
 
+    function loadHistory(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      }catch(e){
+        return [];
+      }
+    }
+
+    function saveHistory(arr){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    }
+
+    function saveCurrent(){
+      if (!lastCalc){
+        // 계산 안 했으면 계산부터
+        calculate();
+      }
+      if (!lastCalc){
+        alert("값을 입력하고 계산한 뒤 저장해줘.");
+        return;
+      }
+
+      const list = loadHistory();
+      // 최신이 위로
+      list.unshift(lastCalc);
+      // 너무 많이 쌓이면 50개까지만
+      const trimmed = list.slice(0, 50);
+      saveHistory(trimmed);
+      renderHistory();
+      alert("저장 완료!");
+    }
+
+    function deleteOne(id){
+      const list = loadHistory().filter(x => x && x.id !== id);
+      saveHistory(list);
+      renderHistory();
+    }
+
+    function clearAll(){
+      const ok = confirm("저장된 정산을 전부 삭제할까?");
+      if (!ok) return;
+      localStorage.removeItem(STORAGE_KEY);
+      renderHistory();
+    }
+
+    function fillFormFrom(calc){
+      $("memo").value = calc.memo || "";
+      $("kg").value = calc.kg ?? "";
+      $("price").value = calc.price ?? "";
+      $("box").value = calc.box ?? "";
+      $("fuel").value = calc.fuel ?? "";
+      $("food").value = calc.food ?? "";
+      $("divideBy").value = calc.divideBy ?? 4.5;
+
+      // 바로 결과도 보여주기
+      lastCalc = calc;
+      kakaoText = buildText(calc);
+      $("result").innerText = kakaoText;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderHistory(){
+      const list = loadHistory();
+      const wrap = $("historyList");
+
+      if (!list.length){
+        wrap.innerHTML = `<div class="muted">아직 저장된 정산이 없어.</div>`;
+        return;
+      }
+
+      wrap.innerHTML = "";
+      list.forEach((item) => {
+        const title = item.memo ? item.memo : "정산";
+        const time = item.createdAt ? item.createdAt : "";
+        const summary = `최종합계 ${won(item.finalTotal)} / 나누기 ${item.divideBy} = ${won(item.perShare)}`;
+
+        const el = document.createElement("div");
+        el.className = "historyItem";
+        el.innerHTML = `
+          <div class="historyTop">
+            <div>
+              <div class="tag">${title}</div>
+              <div class="muted" style="margin-top:6px;">${time}</div>
+              <div style="margin-top:6px; font-weight:700;">${summary}</div>
+            </div>
+          </div>
+          <div class="miniRow">
+            <button class="miniBtn" data-act="load" data-id="${item.id}">불러오기</button>
+            <button class="miniBtn" data-act="copy" data-id="${item.id}">복사</button>
+            <button class="miniBtn" data-act="del" data-id="${item.id}">삭제</button>
+          </div>
+        `;
+        wrap.appendChild(el);
+      });
+
+      // 이벤트 위임
+      wrap.onclick = async (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+
+        const id = btn.getAttribute("data-id");
+        const act = btn.getAttribute("data-act");
+        const list2 = loadHistory();
+        const found = list2.find(x => x && x.id === id);
+        if (!found) return;
+
+        if (act === "load"){
+          fillFormFrom(found);
+        } else if (act === "del"){
+          deleteOne(id);
+        } else if (act === "copy"){
+          const text = buildText(found);
+          try{
+            await navigator.clipboard.writeText(text);
+            alert("복사 완료! 카톡에 붙여넣기만 하면 돼.");
+          }catch(e2){
+            alert("자동 복사가 막혔어. 불러오기 후 결과창을 길게 눌러 복사해줘.");
+          }
+        }
+      };
+    }
+
     $("calcBtn").addEventListener("click", calculate);
     $("copyBtn").addEventListener("click", copyKakao);
+    $("saveBtn").addEventListener("click", saveCurrent);
+    $("clearAllBtn").addEventListener("click", clearAll);
 
-    ["kg","price","box","fuel","food","divideBy"].forEach(id=>{
+    ["memo","kg","price","box","fuel","food","divideBy"].forEach(id=>{
       $(id).addEventListener("keydown", (e)=>{ if(e.key==="Enter") calculate(); });
     });
+
+    // 첫 로드 시 목록 표시
+    renderHistory();
   </script>
 </body>
 </html>
