@@ -7,7 +7,7 @@
   <style>
     body{
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      max-width: 640px;
+      max-width: 680px;
       margin: 22px auto;
       padding: 0 14px;
       line-height: 1.6;
@@ -44,9 +44,9 @@
       border-radius:14px;
       font-size:16px;
     }
-    .primary{ background:#007aff; color:#fff; }
-    .secondary{ background:#111; color:#fff; }
-    .ghost{ background:#fff; border:1px solid #d1d1d6; }
+    .primary{ background:#007aff;color:#fff; }
+    .secondary{ background:#111;color:#fff; }
+    .ghost{ background:#fff;border:1px solid #d1d1d6; }
 
     .btnRow{ display:flex; gap:10px; margin-top:12px; }
     .btnRow button{ margin-top:0; width:100%; }
@@ -87,7 +87,7 @@
     }
     .historyTop{
       display:flex;
-      align-items:center;
+      align-items:flex-start;
       justify-content:space-between;
       gap:10px;
       margin-bottom:8px;
@@ -100,7 +100,7 @@
       padding:4px 8px;
       border-radius:999px;
       display:inline-block;
-      max-width: 70%;
+      max-width: 72%;
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
@@ -122,6 +122,7 @@
       flex-wrap:wrap;
     }
     .muted{ color:#777; font-size:12px; }
+    .strong{ font-weight:700; }
   </style>
 </head>
 
@@ -143,7 +144,8 @@
       </div>
       <div>
         <label>단가 (원)</label>
-        <input type="number" id="price" inputmode="numeric" placeholder="예: 35000" />
+        <!-- 콤마 자동 입력 -->
+        <input type="text" id="price" inputmode="numeric" placeholder="예: 35,000" />
       </div>
     </div>
 
@@ -154,14 +156,16 @@
       </div>
       <div>
         <label>기름값 (원)</label>
-        <input type="number" id="fuel" inputmode="numeric" placeholder="예: 150000" />
+        <!-- 콤마 자동 입력 -->
+        <input type="text" id="fuel" inputmode="numeric" placeholder="예: 150,000" />
       </div>
     </div>
 
     <div class="row">
       <div>
         <label>부식 (원)</label>
-        <input type="number" id="food" inputmode="numeric" placeholder="예: 50000" />
+        <!-- 콤마 자동 입력 -->
+        <input type="text" id="food" inputmode="numeric" placeholder="예: 50,000" />
       </div>
       <div>
         <label>나누기 (기본 4.5)</label>
@@ -177,14 +181,14 @@
     </div>
 
     <div class="result" id="result">값 입력 → 계산하기</div>
-    <div class="hint">복사 버튼은 정산문을 클립보드에 복사해줘. 카톡에서 붙여넣기만 하면 돼.</div>
+    <div class="hint">※ 저장은 이 폰/브라우저에만 저장돼. 카톡 버튼은 정산문을 복사해줘.</div>
   </div>
 
   <div class="card">
     <div class="historyTop">
       <div>
         <div class="sectionTitle">저장된 정산</div>
-        <div class="muted">※ 이 폰/브라우저에만 저장돼. (다른 폰으로는 자동 이동 안 됨)</div>
+        <div class="muted">※ 최대 50개까지 저장</div>
       </div>
       <button class="miniBtn" id="clearAllBtn">전체 삭제</button>
     </div>
@@ -197,17 +201,50 @@
   <script>
     const $ = (id) => document.getElementById(id);
 
-    const STORAGE_KEY = "nakji_settlements_v1";
+    const STORAGE_KEY = "nakji_settlements_v2";
     let kakaoText = "";
     let lastCalc = null;
 
-    function n(v){
-      const num = Number(v);
-      return Number.isFinite(num) ? num : 0;
+    // ---------- 숫자 처리 ----------
+    function num(v){
+      const x = Number(v);
+      return Number.isFinite(x) ? x : 0;
     }
+
+    // 콤마 제거 후 숫자 변환
+    function uncomma(v){
+      const s = String(v ?? "").replace(/,/g, "").trim();
+      if (!s) return 0;
+      // 숫자/소수점/음수만 남김
+      const clean = s.replace(/[^\d.-]/g, "");
+      return Number(clean) || 0;
+    }
+
+    // 원 단위 표시(천단위 콤마)
     function won(x){
       return Math.round(x).toLocaleString("ko-KR") + "원";
     }
+
+    // 입력창 콤마 자동
+    // - 숫자만 허용
+    // - 입력 중 천 단위 콤마 적용
+    function attachCommaInput(el){
+      if (!el) return;
+
+      el.addEventListener("input", () => {
+        const raw = el.value.replace(/,/g, "").replace(/[^\d]/g, "");
+        if (!raw) { el.value = ""; return; }
+        el.value = Number(raw).toLocaleString("ko-KR");
+      });
+
+      // 붙여넣기/한글키보드 등으로 이상값 들어오는 경우 방어
+      el.addEventListener("blur", () => {
+        const raw = el.value.replace(/,/g, "").replace(/[^\d]/g, "");
+        if (!raw) { el.value = ""; return; }
+        el.value = Number(raw).toLocaleString("ko-KR");
+      });
+    }
+
     function nowLabel(){
       const d = new Date();
       const yyyy = d.getFullYear();
@@ -218,16 +255,21 @@
       return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
     }
 
+    // ---------- 텍스트 생성 ----------
     function buildText(calc){
-      const { kg, price, box, fuel, food, divideBy, boxUnit, feeRate,
-              nakjiTotal, boxCost, coopFee, totalCost, finalTotal, perShare, memo, createdAt } = calc;
+      const {
+        kg, price, box, fuel, food, divideBy,
+        boxUnit, feeRate,
+        nakjiTotal, boxCost, coopFee, totalCost, finalTotal, perShare,
+        memo, createdAt
+      } = calc;
 
       const memoLine = memo ? `메모: ${memo}\n` : "";
       const timeLine = createdAt ? `시간: ${createdAt}\n` : "";
 
       return `[낙지잡이 정산]
 ${timeLine}${memoLine}
-낙지: ${kg}kg × ${price.toLocaleString("ko-KR")}원 = ${won(nakjiTotal)}
+낙지: ${kg}kg × ${Math.round(price).toLocaleString("ko-KR")}원 = ${won(nakjiTotal)}
 
 [경비]
 입감: ${box}박스 × ${boxUnit.toLocaleString("ko-KR")}원 = ${won(boxCost)}
@@ -239,17 +281,17 @@ ${timeLine}${memoLine}
 최종합계 나누기 ${divideBy} = ${won(perShare)}`;
     }
 
+    // ---------- 계산 ----------
     function calculate(){
       const memo = $("memo").value.trim();
 
-      const kg = n($("kg").value);
-      const price = n($("price").value);
-      const box = n($("box").value);
-      const fuel = n($("fuel").value);
-      const food = n($("food").value);
-      const divideBy = n($("divideBy").value) || 1;
+      const kg = num($("kg").value);
+      const price = uncomma($("price").value); // 콤마 입력값
+      const box = num($("box").value);
+      const fuel = uncomma($("fuel").value);   // 콤마 입력값
+      const food = uncomma($("food").value);   // 콤마 입력값
+      const divideBy = num($("divideBy").value) || 1;
 
-      // 고정값
       const boxUnit = 60000;
       const feeRate = 0.05;
 
@@ -261,8 +303,10 @@ ${timeLine}${memoLine}
       const finalTotal = nakjiTotal - totalCost;
       const perShare = finalTotal / divideBy;
 
+      const id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + "_" + Math.random().toString(16).slice(2));
+
       lastCalc = {
-        id: crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2),
+        id,
         createdAt: nowLabel(),
         memo,
         kg, price, box, fuel, food, divideBy,
@@ -274,6 +318,7 @@ ${timeLine}${memoLine}
       $("result").innerText = kakaoText;
     }
 
+    // ---------- 복사 ----------
     async function copyKakao(){
       if (!kakaoText) calculate();
       if (!kakaoText){
@@ -288,6 +333,7 @@ ${timeLine}${memoLine}
       }
     }
 
+    // ---------- 저장소 ----------
     function loadHistory(){
       try{
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -303,21 +349,15 @@ ${timeLine}${memoLine}
     }
 
     function saveCurrent(){
-      if (!lastCalc){
-        // 계산 안 했으면 계산부터
-        calculate();
-      }
+      if (!lastCalc) calculate();
       if (!lastCalc){
         alert("값을 입력하고 계산한 뒤 저장해줘.");
         return;
       }
 
       const list = loadHistory();
-      // 최신이 위로
       list.unshift(lastCalc);
-      // 너무 많이 쌓이면 50개까지만
-      const trimmed = list.slice(0, 50);
-      saveHistory(trimmed);
+      saveHistory(list.slice(0, 50));
       renderHistory();
       alert("저장 완료!");
     }
@@ -337,14 +377,13 @@ ${timeLine}${memoLine}
 
     function fillFormFrom(calc){
       $("memo").value = calc.memo || "";
-      $("kg").value = calc.kg ?? "";
-      $("price").value = calc.price ?? "";
-      $("box").value = calc.box ?? "";
-      $("fuel").value = calc.fuel ?? "";
-      $("food").value = calc.food ?? "";
-      $("divideBy").value = calc.divideBy ?? 4.5;
+      $("kg").value = (calc.kg ?? "");
+      $("price").value = (Math.round(calc.price ?? 0)).toLocaleString("ko-KR");
+      $("box").value = (calc.box ?? "");
+      $("fuel").value = (Math.round(calc.fuel ?? 0)).toLocaleString("ko-KR");
+      $("food").value = (Math.round(calc.food ?? 0)).toLocaleString("ko-KR");
+      $("divideBy").value = (calc.divideBy ?? 4.5);
 
-      // 바로 결과도 보여주기
       lastCalc = calc;
       kakaoText = buildText(calc);
       $("result").innerText = kakaoText;
@@ -373,7 +412,7 @@ ${timeLine}${memoLine}
             <div>
               <div class="tag">${title}</div>
               <div class="muted" style="margin-top:6px;">${time}</div>
-              <div style="margin-top:6px; font-weight:700;">${summary}</div>
+              <div class="strong" style="margin-top:6px;">${summary}</div>
             </div>
           </div>
           <div class="miniRow">
@@ -385,7 +424,6 @@ ${timeLine}${memoLine}
         wrap.appendChild(el);
       });
 
-      // 이벤트 위임
       wrap.onclick = async (e) => {
         const btn = e.target.closest("button");
         if (!btn) return;
@@ -412,16 +450,23 @@ ${timeLine}${memoLine}
       };
     }
 
+    // ---------- 이벤트 ----------
     $("calcBtn").addEventListener("click", calculate);
     $("copyBtn").addEventListener("click", copyKakao);
     $("saveBtn").addEventListener("click", saveCurrent);
     $("clearAllBtn").addEventListener("click", clearAll);
 
+    // Enter로 계산
     ["memo","kg","price","box","fuel","food","divideBy"].forEach(id=>{
       $(id).addEventListener("keydown", (e)=>{ if(e.key==="Enter") calculate(); });
     });
 
-    // 첫 로드 시 목록 표시
+    // 콤마 자동 적용
+    attachCommaInput($("price"));
+    attachCommaInput($("fuel"));
+    attachCommaInput($("food"));
+
+    // 첫 로드
     renderHistory();
   </script>
 </body>
