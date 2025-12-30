@@ -3,29 +3,68 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>낙지잡이 정산</title>
+  <title>낙지잡이</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:520px;margin:24px auto;padding:0 14px;line-height:1.6}
-    h1{font-size:22px;margin:6px 0 14px;text-align:center}
-    .card{background:#f5f5f7;border:1px solid #e5e5ea;border-radius:12px;padding:14px}
-    label{display:block;margin-top:10px;font-size:14px}
-    input{width:100%;padding:10px;margin-top:6px;border:1px solid #d1d1d6;border-radius:10px;font-size:16px;box-sizing:border-box}
-    .row{display:flex;gap:10px}
-    .row>div{flex:1}
-    button{width:100%;padding:12px;margin-top:12px;border:0;border-radius:12px;font-size:16px}
-    button.primary{background:#007aff;color:#fff}
-    button.secondary{background:#111;color:#fff}
-    .result{margin-top:14px;white-space:pre-line;background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:12px}
-    .hint{font-size:12px;color:#666;margin-top:8px}
+    body{
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      max-width: 560px;
+      margin: 22px auto;
+      padding: 0 14px;
+      line-height: 1.6;
+    }
+    h1{ font-size: 22px; text-align:center; margin: 8px 0 14px; }
+    .card{
+      background:#f5f5f7;
+      border:1px solid #e5e5ea;
+      border-radius:14px;
+      padding:14px;
+    }
+    label{ display:block; margin-top:10px; font-size:14px; }
+    input{
+      width:100%;
+      padding:10px;
+      margin-top:6px;
+      border:1px solid #d1d1d6;
+      border-radius:12px;
+      font-size:16px;
+      box-sizing:border-box;
+    }
+    .row{ display:flex; gap:10px; }
+    .row > div{ flex:1; }
+
+    button{
+      width:100%;
+      padding:12px;
+      margin-top:12px;
+      border:0;
+      border-radius:14px;
+      font-size:16px;
+    }
+    .primary{ background:#007aff; color:#fff; }
+    .secondary{ background:#111; color:#fff; }
+
+    .result{
+      margin-top:14px;
+      white-space:pre-line;
+      background:#fff;
+      border:1px solid #e5e5ea;
+      border-radius:14px;
+      padding:12px;
+    }
+    .hint{
+      font-size:12px;
+      color:#666;
+      margin-top:8px;
+    }
   </style>
 </head>
 <body>
-  <h1>낙지잡이 정산</h1>
+  <h1>낙지잡이</h1>
 
   <div class="card">
     <div class="row">
       <div>
-        <label>낙지 무게 (kg)</label>
+        <label>낙지 (kg)</label>
         <input type="number" id="kg" inputmode="decimal" placeholder="예: 12" />
       </div>
       <div>
@@ -36,7 +75,7 @@
 
     <div class="row">
       <div>
-        <label>입감 박스 수</label>
+        <label>입감 (박스)</label>
         <input type="number" id="box" inputmode="numeric" placeholder="예: 2" />
       </div>
       <div>
@@ -47,11 +86,11 @@
 
     <div class="row">
       <div>
-        <label>수협 수수료 (%)</label>
-        <input type="number" id="feeRate" inputmode="decimal" value="5" />
+        <label>부식 (원)</label>
+        <input type="number" id="food" inputmode="numeric" placeholder="예: 50000" />
       </div>
       <div>
-        <label>나눌 값 (4.5)</label>
+        <label>나누기 (기본 4.5)</label>
         <input type="number" id="divideBy" inputmode="decimal" value="4.5" />
       </div>
     </div>
@@ -59,76 +98,80 @@
     <button class="primary" id="calcBtn">계산하기</button>
     <button class="secondary" id="copyBtn">카톡으로 보내기(복사)</button>
 
-    <div class="result" id="result">값을 입력하고 계산하기를 눌러줘</div>
-    <div class="hint">※ “카톡으로 보내기(복사)”는 정산 문장을 클립보드에 복사해줘. 카톡에서 붙여넣기만 하면 돼.</div>
+    <div class="result" id="result">값 입력 → 계산하기</div>
+    <div class="hint">카톡 버튼은 정산문을 클립보드에 복사해줘. 카톡에서 붙여넣기만 하면 돼.</div>
   </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
-
     let kakaoText = "";
 
-    function n(val) {
-      const num = Number(val);
+    function n(v){
+      const num = Number(v);
       return Number.isFinite(num) ? num : 0;
     }
-
-    function won(x) {
-      // 소수점 없는 원 단위 표기
-      const v = Math.round(x);
-      return v.toLocaleString("ko-KR") + "원";
+    function won(x){
+      return Math.round(x).toLocaleString("ko-KR") + "원";
     }
 
-    function calculate() {
+    function calculate(){
       const kg = n($("kg").value);
       const price = n($("price").value);
       const box = n($("box").value);
       const fuel = n($("fuel").value);
+      const food = n($("food").value);
 
-      const feeRatePct = n($("feeRate").value);      // 예: 5
-      const divideBy = n($("divideBy").value) || 1;  // 0 방지
+      const divideBy = n($("divideBy").value) || 1;
+
+      // 고정값
+      const boxUnit = 60000;      // 입감 박스 단가
+      const feeRate = 0.05;       // 수협수수료 5%
 
       const nakjiTotal = kg * price;
-      const boxCost = box * 60000;
-      const coopFee = nakjiTotal * (feeRatePct / 100);
-      const totalCost = boxCost + fuel + coopFee;
-      const finalTotal = nakjiTotal - totalCost;
-      const perPerson = finalTotal / divideBy;
 
+      const boxCost = box * boxUnit;
+      const coopFee = nakjiTotal * feeRate;
+
+      const totalCost = boxCost + fuel + coopFee + food;
+      const finalTotal = nakjiTotal - totalCost;
+      const perShare = finalTotal / divideBy;
+
+      // 화면/카톡용 문장
       kakaoText =
 `[낙지잡이 정산]
-낙지 총합: ${won(nakjiTotal)}
-입감비: ${won(boxCost)}
-수협 수수료(${feeRatePct}%): ${won(coopFee)}
-기름값: ${won(fuel)}
-총 경비: ${won(totalCost)}
 
-최종 합계: ${won(finalTotal)}
-한나더(÷${divideBy}): ${won(perPerson)}`;
+낙지: ${kg}kg × ${price.toLocaleString("ko-KR")}원 = ${won(nakjiTotal)}
+
+[경비]
+입감: ${box}박스 × ${boxUnit.toLocaleString("ko-KR")}원 = ${won(boxCost)}
+기름값: ${won(fuel)}
+수협수수료: 낙지 총합의 5% = ${won(coopFee)}
+부식: ${won(food)}
+
+최종합계: 낙지총합 - 경비(입감+기름값+수협수수료+부식) = ${won(finalTotal)}
+최종합계 나누기 ${divideBy} = ${won(perShare)}`;
 
       $("result").innerText = kakaoText;
     }
 
-    async function copyKakao() {
+    async function copyKakao(){
       if (!kakaoText) calculate();
-      if (!kakaoText) {
-        alert("먼저 값을 입력하고 계산해줘.");
+      if (!kakaoText){
+        alert("값을 입력하고 계산해줘.");
         return;
       }
-      try {
+      try{
         await navigator.clipboard.writeText(kakaoText);
         alert("복사 완료! 카톡에서 붙여넣기만 하면 돼.");
-      } catch (e) {
-        // iOS에서 클립보드 권한이 막힌 경우 대비: 선택 복사 유도
-        alert("자동 복사가 막혔어. 아래 정산문을 길게 눌러 전체 선택 후 복사해줘.");
+      }catch(e){
+        alert("자동 복사가 막혔어. 아래 정산문을 길게 눌러서 전체 선택 후 복사해줘.");
       }
     }
 
     $("calcBtn").addEventListener("click", calculate);
     $("copyBtn").addEventListener("click", copyKakao);
 
-    // Enter로도 계산
-    ["kg","price","box","fuel","feeRate","divideBy"].forEach(id=>{
+    ["kg","price","box","fuel","food","divideBy"].forEach(id=>{
       $(id).addEventListener("keydown", (e)=>{ if(e.key==="Enter") calculate(); });
     });
   </script>
