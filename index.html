@@ -170,7 +170,8 @@
       </div>
       <div>
         <label>입감 단가 (원) - 기본 60,000</label>
-        <input type="text" id="iceUnit" inputmode="numeric" value="60,000" />
+        <!-- 숫자 기본표시는 지움(빈칸) / 안 넣으면 계산 시 60,000 자동 적용 -->
+        <input type="text" id="iceUnit" inputmode="numeric" placeholder="(미입력 시 60,000 적용)" />
       </div>
     </div>
 
@@ -181,7 +182,8 @@
       </div>
       <div>
         <label>기름 단가 (원) - 기본 200,000</label>
-        <input type="text" id="fuelUnit" inputmode="numeric" value="200,000" />
+        <!-- 숫자 기본표시는 지움(빈칸) / 안 넣으면 계산 시 200,000 자동 적용 -->
+        <input type="text" id="fuelUnit" inputmode="numeric" placeholder="(미입력 시 200,000 적용)" />
       </div>
     </div>
 
@@ -224,7 +226,11 @@
   <script>
     const $ = (id) => document.getElementById(id);
 
-    const STORAGE_KEY = "nakji_settlements_v5";
+    // 기본 단가(미입력 시 자동 적용)
+    const DEFAULT_ICE_UNIT = 60000;
+    const DEFAULT_FUEL_UNIT = 200000;
+
+    const STORAGE_KEY = "nakji_settlements_v7";
     let kakaoText = "";
     let lastCalc = null;
 
@@ -321,15 +327,20 @@ ${timeLine}${memoLine}
       const nakjiTotal = total1 + total2;
 
       const iceBoxes = num($("iceBoxes").value);
-      const iceUnit  = uncomma($("iceUnit").value);
+
+      // ✅ 단가가 비어있으면 기본값 적용
+      const iceUnitInput = uncomma($("iceUnit").value);
+      const iceUnit = iceUnitInput > 0 ? iceUnitInput : DEFAULT_ICE_UNIT;
       const iceCost  = iceBoxes * iceUnit;
 
       const fuelQty  = num($("fuelQty").value);
-      const fuelUnit = uncomma($("fuelUnit").value);
+
+      // ✅ 단가가 비어있으면 기본값 적용
+      const fuelUnitInput = uncomma($("fuelUnit").value);
+      const fuelUnit = fuelUnitInput > 0 ? fuelUnitInput : DEFAULT_FUEL_UNIT;
       const fuelCost = fuelQty * fuelUnit;
 
       const food = uncomma($("food").value);
-
       const divideBy = num($("divideBy").value) || 1;
 
       const feeRate = 0.05;
@@ -339,7 +350,9 @@ ${timeLine}${memoLine}
       const finalTotal = nakjiTotal - totalCost;
       const perShare = finalTotal / divideBy;
 
-      const id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + "_" + Math.random().toString(16).slice(2));
+      const id = (crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : (String(Date.now()) + "_" + Math.random().toString(16).slice(2));
 
       lastCalc = {
         id,
@@ -428,10 +441,12 @@ ${timeLine}${memoLine}
       $("price2").value = nfmtInt(calc.price2 ?? 0);
 
       $("iceBoxes").value = (calc.iceBoxes ?? "");
-      $("iceUnit").value = nfmtInt(calc.iceUnit ?? 0);
+
+      // 저장된 값은 “사용자가 입력했든 기본이든” 계산에 쓰였던 실제 단가를 보여줌
+      $("iceUnit").value = (calc.iceUnit ? nfmtInt(calc.iceUnit) : "");
 
       $("fuelQty").value = (calc.fuelQty ?? "");
-      $("fuelUnit").value = nfmtInt(calc.fuelUnit ?? 0);
+      $("fuelUnit").value = (calc.fuelUnit ? nfmtInt(calc.fuelUnit) : "");
 
       $("food").value = nfmtInt(calc.food ?? 0);
       $("divideBy").value = (calc.divideBy ?? 4.5);
