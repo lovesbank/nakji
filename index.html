@@ -86,9 +86,7 @@
       color: var(--text);
       outline:none;
     }
-    input:disabled{
-      opacity:0.6;
-    }
+    input:disabled{ opacity:0.6; }
 
     .row{ display:flex; gap:10px; }
     .row > div{ flex:1; }
@@ -200,9 +198,7 @@
     .summaryValue{ font-size:16px; font-weight:800; margin-top:2px; }
 
     /* 개인당 강조 모드 */
-    .bigPerShare .result{
-      font-size:15px;
-    }
+    .bigPerShare .result{ font-size:15px; }
     .bigPerShare .perShareLine{
       font-size:22px;
       font-weight:900;
@@ -221,6 +217,30 @@
       background: var(--card2);
       font-size:12px;
       color: var(--muted);
+    }
+
+    /* 개인당(÷) 스텝퍼 */
+    .stepper{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      margin-top:6px;
+    }
+    .stepBtn{
+      width:44px;
+      min-width:44px;
+      padding:10px 0;
+      margin:0;
+      border-radius:12px;
+      border:1px solid var(--ghostLine);
+      background: var(--ghostBg);
+      font-size:18px;
+      line-height:1;
+    }
+    .stepper input{
+      margin-top:0;
+      text-align:center;
+      font-weight:700;
     }
 
     /* 인쇄/PDF */
@@ -281,7 +301,6 @@
         <button class="ghost" id="round1000Btn">1,000원 단위</button>
         <button class="ghost" id="round10kBtn">10,000원 단위</button>
       </div>
-      <div class="muted" style="margin-top:8px;">※ 선택한 반올림은 “개인당”에만 적용</div>
     </div>
 
     <div class="cardInner" style="margin-top:10px;">
@@ -362,21 +381,32 @@
       </div>
       <div>
         <label>개인당 나누기</label>
-        <input type="number" id="divideBy" inputmode="decimal" placeholder="예: 4.5" />
+        <!-- ✅ 기본 4.5, ±0.5 스텝퍼 -->
+        <div class="stepper noPrint">
+          <button class="stepBtn" id="divDownBtn" type="button">−</button>
+          <input type="number" id="divideBy" inputmode="decimal" step="0.5" value="4.5" />
+          <button class="stepBtn" id="divUpBtn" type="button">+</button>
+        </div>
       </div>
     </div>
 
     <button class="primary noPrint" id="calcBtn">계산하기</button>
 
+    <!-- ✅ 버튼 분리: 저장(PNG) / 카톡으로 이미지 보내기 -->
     <div class="btnRow three noPrint">
       <button class="secondary" id="copyBtn">카톡으로 보내기(복사)</button>
       <button class="ghost" id="saveBtn">이 정산 저장</button>
-      <button class="ghost" id="imgBtn">이미지 저장(PNG)</button>
+      <button class="ghost" id="pngBtn">이미지 저장(PNG)</button>
     </div>
 
     <div class="btnRow two noPrint">
+      <button class="ghost" id="kakaoImgBtn">카톡으로 이미지 보내기</button>
       <button class="ghost" id="pdfBtn">PDF 저장(인쇄)</button>
+    </div>
+
+    <div class="btnRow two noPrint">
       <button class="ghost" id="xlsxBtn">엑셀(.xlsx) 내보내기</button>
+      <button class="ghost" id="imgCopyBtn">이미지 링크 열기(폴백)</button>
     </div>
 
     <div class="btnRow two noPrint">
@@ -412,7 +442,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
 
-    const STORAGE_KEY = "nakji_settlements_final_v1";
+    const STORAGE_KEY = "nakji_settlements_final_split_v1";
     let kakaoText = "";
     let lastCalc = null;
 
@@ -420,6 +450,9 @@
     let bigPerShare = false;
     let roundMode = "none"; // none | 100 | 1000 | 10000
     let locked = false;
+
+    // 마지막으로 만든 이미지 URL(폴백용)
+    let lastImageDataUrl = "";
 
     // 유틸
     function num(v){
@@ -515,7 +548,7 @@ ${perLine}`;
       }
 
       // kakao 기본
-      let t = `[낙지잡이 정산]
+      return `[낙지잡이 정산]
 ${timeLine}${memoLine}
 1) 낙지: ${calc.kg1}kg × ${nfmtInt(calc.price1)}원 = ${won(calc.total1)}
 2) 낙지: ${calc.kg2}kg × ${nfmtInt(calc.price2)}원 = ${won(calc.total2)}
@@ -530,13 +563,29 @@ ${timeLine}${memoLine}
 
 최종합계: ${won(calc.finalTotal)}
 ${perLine}`;
-
-      return t;
     }
 
     function ensureMemoDefault(){
       const m = $("memo").value.trim();
       if (!m) $("memo").value = `${nowYMD()} 정산`;
+    }
+
+    function renderResult(calc){
+      const mode = $("textMode").value;
+      kakaoText = buildText(calc, mode);
+
+      const perLine = `개인당: 최종합계 ÷ ${calc.divideBy} = ${won(calc.perShareRounded)}`;
+      $("result").innerHTML = "";
+
+      const pre = document.createElement("div");
+      pre.style.whiteSpace = "pre-line";
+      pre.textContent = kakaoText.replace(perLine, "").trimEnd() + "\n";
+      $("result").appendChild(pre);
+
+      const perDiv = document.createElement("div");
+      perDiv.className = "perShareLine";
+      perDiv.textContent = perLine;
+      $("result").appendChild(perDiv);
     }
 
     function calculate(){
@@ -582,40 +631,22 @@ ${perLine}`;
         id,
         createdAt: nowLabel(),
         memo,
-
         kg1, price1, total1,
         kg2, price2, total2,
         nakjiTotal,
-
         iceBoxes, iceUnit, iceCost,
         fuelQty, fuelUnit, fuelCost,
-
         food,
         feeRate, coopFee,
-
         totalCost,
         finalTotal,
-        divideBy, perShare, perShareRounded
+        divideBy,
+        perShare,
+        perShareRounded
       };
 
-      const mode = $("textMode").value;
-      kakaoText = buildText(lastCalc, mode);
-
-      // 결과창: 개인당 강조 줄을 DOM으로 만들어주기(강조 토글 대응)
-      const perLine = `개인당: 최종합계 ÷ ${lastCalc.divideBy} = ${won(lastCalc.perShareRounded)}`;
-
-      $("result").innerHTML = "";
-      const pre = document.createElement("div");
-      pre.style.whiteSpace = "pre-line";
-      pre.textContent = kakaoText.replace(perLine, "").trimEnd() + "\n";
-      $("result").appendChild(pre);
-
-      const perDiv = document.createElement("div");
-      perDiv.className = "perShareLine";
-      perDiv.textContent = perLine;
-      $("result").appendChild(perDiv);
-
       updateSummary(lastCalc);
+      renderResult(lastCalc);
       renderHistory();
     }
 
@@ -667,73 +698,140 @@ ${perLine}`;
       XLSX.writeFile(wb, `낙지정산_${nameSafe}.xlsx`);
     }
 
-    // PNG 저장
-    async function saveAsImage(){
-      if (!lastCalc) calculate();
-      if (!lastCalc) return;
-
-      // 캡처 대상: 요약 + 입력카드 결과부분까지 (보기 좋게)
+    // ✅ 캡처 대상 만들기(요약+입력+결과)
+    function makeCaptureTarget(){
       const target = document.createElement("div");
       target.style.padding = "14px";
       target.style.background = getComputedStyle(document.body).backgroundColor;
 
-      // 복제: 요약 카드 + 결과창만
       const summaryClone = $("summaryGrid").closest(".card").cloneNode(true);
       const inputClone = $("inputCard").cloneNode(true);
 
-      // 버튼들/파일입력 숨김
       summaryClone.querySelectorAll(".noPrint").forEach(el=>el.remove());
       inputClone.querySelectorAll(".noPrint").forEach(el=>el.remove());
+
       const rf = inputClone.querySelector("#restoreFile");
       if (rf) rf.remove();
 
-      // result만 남기고 싶으면 입력 영역 제거
-      // 여기서는 보기 좋게 입력값 영역도 포함시키되, 결과가 핵심이니 result는 유지
       target.appendChild(summaryClone);
       target.appendChild(inputClone);
 
-      // 임시로 화면 밖에 붙여 캡처
       target.style.position = "fixed";
       target.style.left = "-99999px";
       target.style.top = "0";
       document.body.appendChild(target);
+      return target;
+    }
 
+    async function buildCanvas(){
+      if (!lastCalc) calculate();
+      if (!lastCalc) return null;
+
+      const target = makeCaptureTarget();
       try{
         const canvas = await html2canvas(target, {
           scale: 2,
           backgroundColor: getComputedStyle(document.body).backgroundColor,
           useCORS: true
         });
-
-        const dataUrl = canvas.toDataURL("image/png");
-
-        const nameSafe = (lastCalc.memo || "정산")
-          .replace(/[\\/:*?"<>|]/g, "_")
-          .slice(0, 30);
-        const filename = `낙지정산_${nameSafe}.png`;
-
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        if (isIOS){
-          const w = window.open();
-          if (w){
-            w.document.write(`<img src="${dataUrl}" style="max-width:100%;height:auto;">`);
-            w.document.title = filename;
-          } else {
-            window.location.href = dataUrl;
-          }
-          return;
-        }
-
-        const a = document.createElement("a");
-        a.href = dataUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }catch(e){
-        alert("이미지 저장 실패. PDF 저장을 대신 써줘.");
-      }finally{
+        return canvas;
+      } finally {
         target.remove();
+      }
+    }
+
+    function safeFilename(){
+      const nameSafe = (lastCalc?.memo || "정산")
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .slice(0, 30);
+      return `낙지정산_${nameSafe}.png`;
+    }
+
+    // ✅ (A) 이미지 저장(PNG): 가능한 경우 다운로드, iOS면 새창(폴백)
+    async function savePNG(){
+      const canvas = await buildCanvas();
+      if (!canvas) return;
+
+      const filename = safeFilename();
+
+      // dataURL 저장(폴백용)
+      lastImageDataUrl = canvas.toDataURL("image/png");
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+      // iOS: 다운로드가 제한적이라 이미지 탭 열기(사용자가 '사진에 저장' 하도록)
+      if (isIOS){
+        const w = window.open();
+        if (w){
+          w.document.write(`<img src="${lastImageDataUrl}" style="max-width:100%;height:auto;">`);
+          w.document.title = filename;
+        } else {
+          window.location.href = lastImageDataUrl;
+        }
+        return;
+      }
+
+      // PC/안드: 다운로드
+      const a = document.createElement("a");
+      a.href = lastImageDataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    // ✅ (B) 카톡으로 이미지 보내기: iOS에서 "파일 공유" 우선 (share files only)
+    async function shareToKakaoAsFile(){
+      const canvas = await buildCanvas();
+      if (!canvas) return;
+
+      const filename = safeFilename();
+
+      // iOS/지원 브라우저: 파일 공유
+      if (navigator.share && canvas.toBlob){
+        const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+        if (blob){
+          const file = new File([blob], filename, { type:"image/png" });
+
+          if (!navigator.canShare || navigator.canShare({ files:[file] })){
+            try{
+              await navigator.share({
+                title: "낙지잡이 정산",
+                text: "정산 이미지 파일",
+                files: [file]
+              });
+              return;
+            }catch(e){
+              // 사용자가 취소했거나 공유 실패 → 아래 폴백
+            }
+          }
+        }
+      }
+
+      // 폴백: 이미지 탭 열기(카톡에선 링크로 갈 수 있음)
+      const dataUrl = canvas.toDataURL("image/png");
+      lastImageDataUrl = dataUrl;
+      const w = window.open();
+      if (w){
+        w.document.write(`<img src="${dataUrl}" style="max-width:100%;height:auto;">`);
+        w.document.title = filename;
+      } else {
+        window.location.href = dataUrl;
+      }
+      alert("기기/브라우저 제한으로 파일 공유가 안 돼서, 이미지 탭을 열었어. 공유에서 카톡을 선택해줘(링크로 갈 수도 있어).");
+    }
+
+    // 폴백용: 마지막 이미지 링크 열기
+    function openLastImage(){
+      if (!lastImageDataUrl){
+        alert("아직 만든 이미지가 없어. 먼저 이미지 저장(PNG) 또는 카톡으로 이미지 보내기를 눌러줘.");
+        return;
+      }
+      const w = window.open();
+      if (w){
+        w.document.write(`<img src="${lastImageDataUrl}" style="max-width:100%;height:auto;">`);
+      } else {
+        window.location.href = lastImageDataUrl;
       }
     }
 
@@ -790,32 +888,19 @@ ${perLine}`;
       $("fuelUnit").value = nfmtInt(calc.fuelUnit ?? 0);
 
       $("food").value = nfmtInt(calc.food ?? 0);
-      $("divideBy").value = (calc.divideBy ?? "");
+      $("divideBy").value = (calc.divideBy ?? 4.5);
 
-      lastCalc = calc;
-      const mode = $("textMode").value;
-      kakaoText = buildText(calc, mode);
-
-      // 결과 렌더 재구성
-      const perLine = `개인당: 최종합계 ÷ ${calc.divideBy} = ${won(calc.perShareRounded ?? calc.perShare ?? 0)}`;
-      $("result").innerHTML = "";
-      const pre = document.createElement("div");
-      pre.style.whiteSpace = "pre-line";
-      pre.textContent = kakaoText.replace(perLine, "").trimEnd() + "\n";
-      $("result").appendChild(pre);
-
-      const perDiv = document.createElement("div");
-      perDiv.className = "perShareLine";
-      perDiv.textContent = perLine;
-      $("result").appendChild(perDiv);
-
-      updateSummary({
+      // 계산/표시 재구성
+      const per = calc.perShareRounded ?? roundPerShare(calc.perShare ?? 0);
+      lastCalc = {
         ...calc,
-        perShareRounded: calc.perShareRounded ?? roundPerShare(calc.perShare ?? 0),
+        perShareRounded: per,
         totalCost: calc.totalCost ?? (calc.iceCost + calc.fuelCost + (calc.nakjiTotal*0.05) + calc.food),
         finalTotal: calc.finalTotal ?? (calc.nakjiTotal - (calc.iceCost + calc.fuelCost + (calc.nakjiTotal*0.05) + calc.food)),
-      });
+      };
 
+      updateSummary(lastCalc);
+      renderResult(lastCalc);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
@@ -901,12 +986,12 @@ ${perLine}`;
       $("lockBtn").style.display = on ? "none" : "block";
       $("unlockBtn").style.display = on ? "block" : "none";
 
-      // 계산 버튼은 잠금 시 비활성
       $("calcBtn").disabled = on;
       $("saveBtn").disabled = on;
+      $("pngBtn").disabled = false;
+      $("kakaoImgBtn").disabled = false;
     }
 
-    // 반올림 버튼 UI
     function setRound(mode){
       roundMode = mode;
       if (lastCalc) calculate();
@@ -947,11 +1032,26 @@ ${perLine}`;
       reader.readAsText(file, "utf-8");
     }
 
-    // 강조 토글
     function toggleBig(){
       bigPerShare = !bigPerShare;
       document.body.classList.toggle("bigPerShare", bigPerShare);
       $("toggleBigBtn").innerText = bigPerShare ? "원래 크기로" : "개인당 금액 크게 보기";
+    }
+
+    // ✅ 개인당(÷) 0.5 스텝
+    function clampDivide(v){
+      if (!Number.isFinite(v)) v = 4.5;
+      if (v < 0.5) v = 0.5;
+      // 소수 0.5 단위 정규화
+      v = Math.round(v * 2) / 2;
+      return v;
+    }
+    function stepDivide(delta){
+      if (locked) return;
+      const cur = num($("divideBy").value) || 4.5;
+      const next = clampDivide(cur + delta);
+      $("divideBy").value = next;
+      if (lastCalc) calculate();
     }
 
     // 이벤트 연결
@@ -962,7 +1062,11 @@ ${perLine}`;
 
     $("pdfBtn").addEventListener("click", savePDF);
     $("xlsxBtn").addEventListener("click", exportXLSX);
-    $("imgBtn").addEventListener("click", saveAsImage);
+
+    // ✅ 분리된 이미지 기능
+    $("pngBtn").addEventListener("click", savePNG);
+    $("kakaoImgBtn").addEventListener("click", shareToKakaoAsFile);
+    $("imgCopyBtn").addEventListener("click", openLastImage);
 
     $("backupBtn").addEventListener("click", backupJSON);
     $("restoreBtn").addEventListener("click", restoreJSON);
@@ -979,6 +1083,15 @@ ${perLine}`;
     $("lockBtn").addEventListener("click", ()=> setLocked(true));
     $("unlockBtn").addEventListener("click", ()=> setLocked(false));
 
+    // 스텝퍼 버튼
+    $("divDownBtn").addEventListener("click", ()=> stepDivide(-0.5));
+    $("divUpBtn").addEventListener("click", ()=> stepDivide(+0.5));
+    $("divideBy").addEventListener("change", ()=>{
+      if (locked) return;
+      $("divideBy").value = clampDivide(num($("divideBy").value) || 4.5);
+      if (lastCalc) calculate();
+    });
+
     // Enter로 계산
     ["memo","kg1","price1","kg2","price2","iceBoxes","iceUnit","fuelQty","fuelUnit","food","divideBy"].forEach(id=>{
       $(id).addEventListener("keydown", (e)=>{ if(e.key==="Enter" && !locked) calculate(); });
@@ -994,10 +1107,10 @@ ${perLine}`;
     // 최초 요약/히스토리
     renderHistory();
 
-    // textMode 바뀌면 결과문도 즉시 갱신
     $("textMode").addEventListener("change", ()=>{ if (lastCalc) calculate(); });
 
-    // 처음에 기본 메모 자동 (사용자가 아예 안 만지면 계산 시 자동 채움)
+    // 초기 개인당 기본값
+    $("divideBy").value = 4.5;
   </script>
 </body>
 </html>
