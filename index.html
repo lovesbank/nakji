@@ -62,11 +62,6 @@
       user-select:text;
       -webkit-user-select:text;
     }
-    .hint{
-      font-size:12px;
-      color:#666;
-      margin-top:8px;
-    }
 
     .sectionTitle{
       font-size:15px;
@@ -123,6 +118,16 @@
     }
     .muted{ color:#777; font-size:12px; }
     .strong{ font-weight:700; }
+
+    .exportRow{
+      display:flex;
+      gap:10px;
+      margin-top:12px;
+    }
+    .exportRow button{
+      margin-top:0;
+      width:100%;
+    }
   </style>
 </head>
 
@@ -203,8 +208,12 @@
       <button class="ghost" id="saveBtn">이 정산 저장</button>
     </div>
 
+    <div class="exportRow">
+      <button class="ghost" id="csvBtn">CSV 저장</button>
+      <button class="ghost" id="pdfBtn">PDF 저장</button>
+    </div>
+
     <div class="result" id="result">값 입력 → 계산하기</div>
-    <div class="hint"></div>
   </div>
 
   <div class="card">
@@ -224,7 +233,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
 
-    const STORAGE_KEY = "nakji_settlements_v7";
+    const STORAGE_KEY = "nakji_settlements_v8";
     let kakaoText = "";
     let lastCalc = null;
 
@@ -245,6 +254,7 @@
       return Math.round(x).toLocaleString("ko-KR");
     }
 
+    // 원화 입력 콤마 자동(정수)
     function attachCommaInput(el){
       if (!el) return;
       el.addEventListener("input", () => {
@@ -329,6 +339,7 @@ ${timeLine}${memoLine}
       const fuelCost = fuelQty * fuelUnit;
 
       const food = uncomma($("food").value);
+
       const divideBy = num($("divideBy").value) || 1;
 
       const feeRate = 0.05;
@@ -338,9 +349,7 @@ ${timeLine}${memoLine}
       const finalTotal = nakjiTotal - totalCost;
       const perShare = finalTotal / divideBy;
 
-      const id = (crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : (String(Date.now()) + "_" + Math.random().toString(16).slice(2));
+      const id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Date.now()) + "_" + Math.random().toString(16).slice(2));
 
       lastCalc = {
         id,
@@ -429,10 +438,10 @@ ${timeLine}${memoLine}
       $("price2").value = nfmtInt(calc.price2 ?? 0);
 
       $("iceBoxes").value = (calc.iceBoxes ?? "");
-      $("iceUnit").value = (calc.iceUnit ? nfmtInt(calc.iceUnit) : nfmtInt(60000));
+      $("iceUnit").value = nfmtInt(calc.iceUnit ?? 0);
 
       $("fuelQty").value = (calc.fuelQty ?? "");
-      $("fuelUnit").value = (calc.fuelUnit ? nfmtInt(calc.fuelUnit) : nfmtInt(200000));
+      $("fuelUnit").value = nfmtInt(calc.fuelUnit ?? 0);
 
       $("food").value = nfmtInt(calc.food ?? 0);
       $("divideBy").value = (calc.divideBy ?? 4.5);
@@ -503,11 +512,176 @@ ${timeLine}${memoLine}
       };
     }
 
+    /* ===========================
+       파일명 예쁘게 + CSV/PDF 저장
+       =========================== */
+
+    function compactDateLabel(isoLike){
+      const s = String(isoLike || "").trim();
+      if (!s) return "";
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+      if (!m) return s.replace(/[^\d]/g,"").slice(0,12);
+      return `${m[1]}${m[2]}${m[3]}_${m[4]}${m[5]}`;
+    }
+
+    function sanitizeFilePart(s){
+      return String(s ?? "")
+        .trim()
+        .replace(/\s+/g, "_")
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .replace(/_+/g, "_")
+        .slice(0, 24);
+    }
+
+    function toMoneyShort(x){
+      const n = Math.round(Number(x) || 0);
+      const abs = Math.abs(n);
+      if (abs >= 100000000) return (n/100000000).toFixed(1).replace(/\.0$/,"") + "억";
+      if (abs >= 10000) return (n/10000).toFixed(1).replace(/\.0$/,"") + "만";
+      return String(n);
+    }
+
+    function buildNiceFileName(calc, ext){
+      const x = calc || {};
+      const dt = compactDateLabel(x.createdAt) || compactDateLabel(nowLabel());
+      const memo = sanitizeFilePart(x.memo || "정산");
+      const finalS = toMoneyShort(x.finalTotal);
+      const perS   = toMoneyShort(x.perShare);
+      const divS   = (x.divideBy != null) ? String(x.divideBy).replace(/\.0$/,"") : "";
+
+      const base = [
+        "낙지정산",
+        dt,
+        memo,
+        `최종${finalS}`,
+        `개인당${perS}`,
+        divS ? `나눔${divS}` : ""
+      ].filter(Boolean).join("_");
+
+      return `${base}.${ext}`;
+    }
+
+    function csvEscape(s){
+      const str = String(s ?? "");
+      if (/[",\n]/.test(str)) return `"${str.replace(/"/g,'""')}"`;
+      return str;
+    }
+
+    function exportCSV(calc){
+      if (!lastCalc) calculate();
+      const x = calc || lastCalc;
+      if (!x){ alert("먼저 계산해줘."); return; }
+
+      const rows = [];
+      rows.push([
+        "시간","메모",
+        "낙지1kg","단가1","낙지1합계",
+        "낙지2kg","단가2","낙지2합계",
+        "낙지총합",
+        "입감박스","입감단가","입감비",
+        "기름수량","기름단가","기름비",
+        "수협수수료(5%)",
+        "부식",
+        "총경비",
+        "최종합계",
+        "개인당나누기",
+        "개인당"
+      ]);
+
+      rows.push([
+        x.createdAt, x.memo,
+        x.kg1, x.price1, Math.round(x.total1),
+        x.kg2, x.price2, Math.round(x.total2),
+        Math.round(x.nakjiTotal),
+        x.iceBoxes, x.iceUnit, Math.round(x.iceCost),
+        x.fuelQty, x.fuelUnit, Math.round(x.fuelCost),
+        Math.round(x.coopFee),
+        x.food,
+        Math.round(x.totalCost),
+        Math.round(x.finalTotal),
+        x.divideBy,
+        Math.round(x.perShare)
+      ]);
+
+      const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+      const bom = "\uFEFF"; // 한글 엑셀 호환
+      const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = buildNiceFileName(x, "csv");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportPDF(calc){
+      if (!lastCalc) calculate();
+      const x = calc || lastCalc;
+      if (!x){ alert("먼저 계산해줘."); return; }
+
+      const text = buildText(x);
+      const fileName = buildNiceFileName(x, "pdf");
+
+      const w = window.open("", "_blank", "noopener,noreferrer");
+      if (!w){
+        alert("팝업이 막혔어. 브라우저에서 팝업 허용 후 다시 눌러줘.");
+        return;
+      }
+
+      const safeHTML = text
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/\n/g,"<br>");
+
+      const html = `
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${fileName}</title>
+<style>
+  body{ margin:0; padding:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  .wrap{ padding:18px; line-height:1.55; font-size:14px; }
+  .title{ font-weight:800; font-size:16px; margin-bottom:10px; }
+  .fname{ font-size:12px; color:#666; margin-bottom:12px; }
+  .box{ white-space:pre-line; }
+  @media print{
+    .noPrint{ display:none; }
+    .wrap{ padding:0; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">낙지잡이 정산</div>
+    <div class="fname">추천 파일명: <b>${fileName}</b></div>
+    <div class="box">${safeHTML}</div>
+    <div class="noPrint" style="margin-top:14px; color:#666; font-size:12px;">
+      인쇄 → “PDF로 저장” 누르고, 파일명은 위 추천 파일명으로 저장하면 깔끔해.
+    </div>
+  </div>
+  <script>
+    window.onload = () => { window.print(); };
+  <\/script>
+</body>
+</html>`;
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+    }
+
     // 이벤트
     $("calcBtn").addEventListener("click", calculate);
     $("copyBtn").addEventListener("click", copyKakao);
     $("saveBtn").addEventListener("click", saveCurrent);
     $("clearAllBtn").addEventListener("click", clearAll);
+    $("csvBtn").addEventListener("click", () => exportCSV());
+    $("pdfBtn").addEventListener("click", () => exportPDF());
 
     // Enter로 계산
     ["memo","kg1","price1","kg2","price2","iceBoxes","iceUnit","fuelQty","fuelUnit","food","divideBy"].forEach(id=>{
