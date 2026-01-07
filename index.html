@@ -268,19 +268,10 @@
     </div>
 
     <div style="margin-top:10px; display:flex; justify-content:space-between; gap:10px; align-items:center;">
-      <div class="lockedBadge" id="lockBadge" style="display:none;">🔒 잠금됨</div>
       <div class="muted" id="calcTime"></div>
     </div>
 
-    <div class="btnRow two noPrint">
-      <button class="ghost" id="recentBtn">최근 1건 바로 불러오기</button>
-      <button class="ghost" id="toggleBigBtn">개인당 금액 크게 보기</button>
-    </div>
-
-    <div class="btnRow two noPrint">
-      <button class="ghost" id="lockBtn">계산 잠금</button>
-      <button class="ghost" id="unlockBtn" style="display:none;">잠금 해제</button>
-    </div>
+    <!-- ✅ 사진에 나온 버튼영역(최근/크게보기/잠금) 삭제 -->
   </div>
 
   <!-- 입력 카드 -->
@@ -410,7 +401,6 @@
     let kakaoText = "";
     let lastCalc = null;
 
-    let bigPerShare = false;
     let locked = false;
     let lastImageDataUrl = "";
 
@@ -910,29 +900,58 @@ ${perLine}`;
       };
     }
 
-    function loadRecentOne(){
-      const list = loadHistory();
-      if (!list.length) return alert("저장된 정산이 없어.");
-      fillFormFrom(list[0]);
+    function clampDivide(v){
+      if (!Number.isFinite(v)) v = 4.5;
+      if (v < 0.5) v = 0.5;
+      v = Math.round(v * 2) / 2;
+      return v;
+    }
+    function stepDivide(delta){
+      if (locked) return;
+      const cur = num($("divideBy").value) || 4.5;
+      const next = clampDivide(cur + delta);
+      $("divideBy").value = next;
+      if (lastCalc) calculate();
     }
 
-    function setLocked(on){
-      locked = on;
-      const inputs = ["memo","kg1","price1","kg2","price2","iceBoxes","iceUnit","fuelQty","fuelUnit","food","divideBy"];
-      inputs.forEach(id=>{
-        const el = $(id);
-        if (el) el.disabled = on;
-      });
+    $("calcBtn").addEventListener("click", calculate);
+    $("copyBtn").addEventListener("click", copyKakao);
+    $("saveBtn").addEventListener("click", saveCurrent);
+    $("clearAllBtn").addEventListener("click", clearAll);
 
-      $("lockBadge").style.display = on ? "inline-flex" : "none";
-      $("lockBtn").style.display = on ? "none" : "block";
-      $("unlockBtn").style.display = on ? "block" : "none";
+    $("pdfBtn").addEventListener("click", savePDF);
+    $("xlsxBtn").addEventListener("click", exportXLSX);
 
-      $("calcBtn").disabled = on;
-      $("saveBtn").disabled = on;
-      $("pngBtn").disabled = false;
-      $("kakaoImgBtn").disabled = false;
-    }
+    $("pngBtn").addEventListener("click", savePNG);
+    $("kakaoImgBtn").addEventListener("click", shareToKakaoAsFile);
+    $("imgCopyBtn").addEventListener("click", openLastImage);
+
+    $("backupBtn").addEventListener("click", backupJSON);
+    $("restoreBtn").addEventListener("click", restoreJSON);
+    $("restoreFile").addEventListener("change", (e)=> handleRestoreFile(e.target.files && e.target.files[0]));
+
+    $("divDownBtn").addEventListener("click", ()=> stepDivide(-0.5));
+    $("divUpBtn").addEventListener("click", ()=> stepDivide(+0.5));
+    $("divideBy").addEventListener("change", ()=>{
+      if (locked) return;
+      $("divideBy").value = clampDivide(num($("divideBy").value) || 4.5);
+      if (lastCalc) calculate();
+    });
+
+    ["memo","kg1","price1","kg2","price2","iceBoxes","iceUnit","fuelQty","fuelUnit","food","divideBy"].forEach(id=>{
+      $(id).addEventListener("keydown", (e)=>{ if(e.key==="Enter" && !locked) calculate(); });
+    });
+
+    attachCommaInput($("price1"));
+    attachCommaInput($("price2"));
+    attachCommaInput($("iceUnit"));
+    attachCommaInput($("fuelUnit"));
+    attachCommaInput($("food"));
+
+    renderHistory();
+    updateAllPerShareTotal();
+
+    $("divideBy").value = 4.5;
 
     function backupJSON(){
       const list = loadHistory();
@@ -967,71 +986,6 @@ ${perLine}`;
       };
       reader.readAsText(file, "utf-8");
     }
-
-    function toggleBig(){
-      bigPerShare = !bigPerShare;
-      document.body.classList.toggle("bigPerShare", bigPerShare);
-      $("toggleBigBtn").innerText = bigPerShare ? "원래 크기로" : "개인당 금액 크게 보기";
-    }
-
-    function clampDivide(v){
-      if (!Number.isFinite(v)) v = 4.5;
-      if (v < 0.5) v = 0.5;
-      v = Math.round(v * 2) / 2;
-      return v;
-    }
-    function stepDivide(delta){
-      if (locked) return;
-      const cur = num($("divideBy").value) || 4.5;
-      const next = clampDivide(cur + delta);
-      $("divideBy").value = next;
-      if (lastCalc) calculate();
-    }
-
-    $("calcBtn").addEventListener("click", calculate);
-    $("copyBtn").addEventListener("click", copyKakao);
-    $("saveBtn").addEventListener("click", saveCurrent);
-    $("clearAllBtn").addEventListener("click", clearAll);
-
-    $("pdfBtn").addEventListener("click", savePDF);
-    $("xlsxBtn").addEventListener("click", exportXLSX);
-
-    $("pngBtn").addEventListener("click", savePNG);
-    $("kakaoImgBtn").addEventListener("click", shareToKakaoAsFile);
-    $("imgCopyBtn").addEventListener("click", openLastImage);
-
-    $("backupBtn").addEventListener("click", backupJSON);
-    $("restoreBtn").addEventListener("click", restoreJSON);
-    $("restoreFile").addEventListener("change", (e)=> handleRestoreFile(e.target.files && e.target.files[0]));
-
-    $("recentBtn").addEventListener("click", loadRecentOne);
-    $("toggleBigBtn").addEventListener("click", toggleBig);
-
-    $("lockBtn").addEventListener("click", ()=> setLocked(true));
-    $("unlockBtn").addEventListener("click", ()=> setLocked(false));
-
-    $("divDownBtn").addEventListener("click", ()=> stepDivide(-0.5));
-    $("divUpBtn").addEventListener("click", ()=> stepDivide(+0.5));
-    $("divideBy").addEventListener("change", ()=>{
-      if (locked) return;
-      $("divideBy").value = clampDivide(num($("divideBy").value) || 4.5);
-      if (lastCalc) calculate();
-    });
-
-    ["memo","kg1","price1","kg2","price2","iceBoxes","iceUnit","fuelQty","fuelUnit","food","divideBy"].forEach(id=>{
-      $(id).addEventListener("keydown", (e)=>{ if(e.key==="Enter" && !locked) calculate(); });
-    });
-
-    attachCommaInput($("price1"));
-    attachCommaInput($("price2"));
-    attachCommaInput($("iceUnit"));
-    attachCommaInput($("fuelUnit"));
-    attachCommaInput($("food"));
-
-    renderHistory();
-    updateAllPerShareTotal();
-
-    $("divideBy").value = 4.5;
   </script>
 </body>
 </html>
