@@ -359,17 +359,7 @@
       <button class="ghost" id="pdfBtn">PDF 저장(인쇄)</button>
     </div>
 
-    <div class="btnRow two noPrint">
-      <button class="ghost" id="xlsxBtn">엑셀(.xlsx) 내보내기</button>
-      <button class="ghost" id="imgCopyBtn">이미지 링크 열기(폴백)</button>
-    </div>
-
-    <div class="btnRow two noPrint">
-      <button class="ghost" id="backupBtn">백업(JSON 저장)</button>
-      <button class="ghost" id="restoreBtn">복원(JSON 불러오기)</button>
-    </div>
-
-    <input type="file" id="restoreFile" accept="application/json" style="display:none;" />
+    <!-- ✅ 사진에 나온 버튼영역(엑셀/이미지링크/백업/복원) 삭제 -->
 
     <div class="result" id="result">값 입력 → 계산하기</div>
   </div>
@@ -611,35 +601,6 @@ ${perLine}`;
       window.print();
     }
 
-    function exportXLSX(){
-      if (!lastCalc) calculate();
-      if (!lastCalc) return;
-
-      const rows = [
-        ["항목", "수량", "단가(원)", "금액(원)"],
-        ["낙지1", lastCalc.kg1, lastCalc.price1, Math.round(lastCalc.total1)],
-        ["낙지2", lastCalc.kg2, lastCalc.price2, Math.round(lastCalc.total2)],
-        ["낙지총합", "", "", Math.round(lastCalc.nakjiTotal)],
-        ["", "", "", ""],
-        ["입감(박스)", lastCalc.iceBoxes, lastCalc.iceUnit, Math.round(lastCalc.iceCost)],
-        ["기름", lastCalc.fuelQty, lastCalc.fuelUnit, Math.round(lastCalc.fuelCost)],
-        ["수협수수료(5%)", "", "", Math.round(lastCalc.coopFee)],
-        ["부식", "", "", Math.round(lastCalc.food)],
-        ["총경비", "", "", Math.round(lastCalc.totalCost)],
-        ["", "", "", ""],
-        ["최종합계", "", "", Math.round(lastCalc.finalTotal)],
-        ["개인당", lastCalc.divideBy, "", Math.round(lastCalc.perShareRounded)],
-      ];
-
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      ws["!cols"] = [{wch:18},{wch:10},{wch:14},{wch:14}];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "정산");
-
-      const nameSafe = (lastCalc.memo || "정산").replace(/[\\/:*?"<>|]/g, "_").slice(0, 30);
-      XLSX.writeFile(wb, `낙지정산_${nameSafe}.xlsx`);
-    }
-
     function makeCaptureTarget(){
       const target = document.createElement("div");
       target.style.padding = "14px";
@@ -651,9 +612,6 @@ ${perLine}`;
 
       topClone.querySelectorAll(".noPrint").forEach(el=>el.remove());
       inputClone.querySelectorAll(".noPrint").forEach(el=>el.remove());
-
-      const rf = inputClone.querySelector("#restoreFile");
-      if (rf) rf.remove();
 
       target.appendChild(topClone);
       target.appendChild(inputClone);
@@ -753,19 +711,6 @@ ${perLine}`;
       alert("기기/브라우저 제한으로 파일 공유가 안 돼서, 이미지 탭을 열었어. 공유에서 카톡을 선택해줘(링크로 갈 수도 있어).");
     }
 
-    function openLastImage(){
-      if (!lastImageDataUrl){
-        alert("아직 만든 이미지가 없어. 먼저 이미지 저장(PNG) 또는 카톡으로 이미지 보내기를 눌러줘.");
-        return;
-      }
-      const w = window.open();
-      if (w){
-        w.document.write(`<img src="${lastImageDataUrl}" style="max-width:100%;height:auto;">`);
-      } else {
-        window.location.href = lastImageDataUrl;
-      }
-    }
-
     function loadHistory(){
       try{
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -806,39 +751,6 @@ ${perLine}`;
       updateAllPerShareTotal();
     }
 
-    function fillFormFrom(calc){
-      $("memo").value = calc.memo || "";
-      $("kg1").value = (calc.kg1 ?? "");
-      $("price1").value = nfmtInt(calc.price1 ?? 0);
-
-      $("kg2").value = (calc.kg2 ?? "");
-      $("price2").value = nfmtInt(calc.price2 ?? 0);
-
-      $("iceBoxes").value = (calc.iceBoxes ?? "");
-      $("iceUnit").value = nfmtInt(calc.iceUnit ?? 0);
-
-      $("fuelQty").value = (calc.fuelQty ?? "");
-      $("fuelUnit").value = nfmtInt(calc.fuelUnit ?? 0);
-
-      $("food").value = nfmtInt(calc.food ?? 0);
-      $("divideBy").value = (calc.divideBy ?? 4.5);
-
-      const per = (calc.perShareRounded ?? calc.perShare ?? 0);
-
-      lastCalc = {
-        ...calc,
-        perShareRounded: per,
-        totalCost: calc.totalCost ?? (calc.iceCost + calc.fuelCost + (calc.nakjiTotal*0.05) + calc.food),
-        finalTotal: calc.finalTotal ?? (calc.nakjiTotal - (calc.iceCost + calc.fuelCost + (calc.nakjiTotal*0.05) + calc.food)),
-      };
-
-      $("calcTime").innerText = lastCalc.createdAt ? `계산 시각: ${String(lastCalc.createdAt).split(" ")[1] || ""}` : "";
-
-      renderResult(lastCalc);
-      updateAllPerShareTotal();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-
     function renderHistory(){
       const list = loadHistory();
       const wrap = $("historyList");
@@ -873,31 +785,6 @@ ${perLine}`;
         `;
         wrap.appendChild(el);
       });
-
-      wrap.onclick = async (e) => {
-        const btn = e.target.closest("button");
-        if (!btn) return;
-
-        const id = btn.getAttribute("data-id");
-        const act = btn.getAttribute("data-act");
-        const list2 = loadHistory();
-        const found = list2.find(x => x && x.id === id);
-        if (!found) return;
-
-        if (act === "load"){
-          fillFormFrom(found);
-        } else if (act === "del"){
-          deleteOne(id);
-        } else if (act === "copy"){
-          const text = buildText(found);
-          try{
-            await navigator.clipboard.writeText(text);
-            alert("복사 완료!");
-          }catch(e2){
-            alert("자동 복사가 막혔어. 불러오기 후 결과창을 길게 눌러 복사해줘.");
-          }
-        }
-      };
     }
 
     function clampDivide(v){
@@ -920,15 +807,9 @@ ${perLine}`;
     $("clearAllBtn").addEventListener("click", clearAll);
 
     $("pdfBtn").addEventListener("click", savePDF);
-    $("xlsxBtn").addEventListener("click", exportXLSX);
 
     $("pngBtn").addEventListener("click", savePNG);
     $("kakaoImgBtn").addEventListener("click", shareToKakaoAsFile);
-    $("imgCopyBtn").addEventListener("click", openLastImage);
-
-    $("backupBtn").addEventListener("click", backupJSON);
-    $("restoreBtn").addEventListener("click", restoreJSON);
-    $("restoreFile").addEventListener("change", (e)=> handleRestoreFile(e.target.files && e.target.files[0]));
 
     $("divDownBtn").addEventListener("click", ()=> stepDivide(-0.5));
     $("divUpBtn").addEventListener("click", ()=> stepDivide(+0.5));
@@ -952,40 +833,6 @@ ${perLine}`;
     updateAllPerShareTotal();
 
     $("divideBy").value = 4.5;
-
-    function backupJSON(){
-      const list = loadHistory();
-      const blob = new Blob([JSON.stringify(list, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `낙지정산_백업_${nowYMD().replaceAll("/","-")}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-
-    function restoreJSON(){
-      $("restoreFile").click();
-    }
-    function handleRestoreFile(file){
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try{
-          const data = JSON.parse(String(reader.result || "[]"));
-          if (!Array.isArray(data)) throw new Error("형식 오류");
-          saveHistory(data.slice(0, 50));
-          renderHistory();
-          updateAllPerShareTotal();
-          alert("복원 완료!");
-        }catch(e){
-          alert("복원 실패: JSON 파일이 올바르지 않아.");
-        }
-      };
-      reader.readAsText(file, "utf-8");
-    }
   </script>
 </body>
 </html>
