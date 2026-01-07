@@ -233,10 +233,20 @@
 <body>
   <h1>낙지잡이</h1>
 
+  <!-- ✅ 상단: 이번분 총합 + 새로고침(확정) + (이전/이번/다음) -->
   <div class="card">
     <div class="topTotalLine">
-      <div class="topTotalLabel">개인당 총합</div>
-      <div class="topTotalValue" id="sumAllPer">0원</div>
+      <div class="topTotalLabel">개인당 총합(이번분)</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="topTotalValue" id="sumAllPer">0원</div>
+        <button class="miniBtn noPrint" id="refreshSumBtn" style="margin:0;">새로고침</button>
+      </div>
+    </div>
+
+    <div class="result" style="margin-top:12px;">
+      <div class="muted">새로고침 누르기 전 총합(확정): <span class="strong" id="prevSum">0원</span></div>
+      <div class="muted">이번에 새로 저장된 총합(이번분): <span class="strong" id="newSum">0원</span></div>
+      <div class="muted">다음 총합(확정+이번분): <span class="strong" id="nextSum">0원</span></div>
     </div>
 
     <div style="margin-top:10px; display:flex; justify-content:space-between; gap:10px; align-items:center;">
@@ -354,6 +364,8 @@
     const $ = (id) => document.getElementById(id);
 
     const STORAGE_KEY = "nakji_settlements_final_split_v1";
+    const SUM_STATE_KEY = "nakji_sum_refresh_state_v1"; // ✅ 새로고침(확정) 상태 저장키
+
     let kakaoText = "";
     let lastCalc = null;
 
@@ -435,6 +447,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
     }
 
+    // ✅ 저장된 정산: 날짜별 개인당 합계로 묶어서 총합 계산(기존 로직 유지)
     function calcAllPerShareTotalFromHistory(){
       const list = loadHistory();
       const byDate = {};
@@ -449,8 +462,77 @@
       return total;
     }
 
-    function updateAllPerShareTotal(){
-      $("sumAllPer").innerText = won(calcAllPerShareTotalFromHistory());
+    // ✅ 새로고침(확정) 상태 저장/로드
+    function loadSumState(){
+      try{
+        const raw = localStorage.getItem(SUM_STATE_KEY);
+        const s = raw ? JSON.parse(raw) : null;
+        if (s && typeof s === "object"){
+          return {
+            accumulated: Number(s.accumulated || 0) || 0,     // 확정 누적(새로고침 누르기 전 총합)
+            snapshotTotal: Number(s.snapshotTotal || 0) || 0  // 마지막 새로고침 시점의 전체합 스냅샷
+          };
+        }
+      }catch(e){}
+      return { accumulated: 0, snapshotTotal: 0 };
+    }
+    function saveSumState(state){
+      localStorage.setItem(SUM_STATE_KEY, JSON.stringify(state));
+    }
+    function getTotalAll(){
+      return Number(calcAllPerShareTotalFromHistory() || 0) || 0;
+    }
+
+    // ✅ UI 업데이트: (이번분 / 이전 / 이번 / 다음)
+    function updateSumUI(){
+      const totalAll = getTotalAll();
+      const state = loadSumState();
+
+      // 삭제 등으로 전체합이 줄면 보정
+      let changed = false;
+      if (totalAll < state.snapshotTotal){
+        state.snapshotTotal = totalAll;
+        changed = true;
+      }
+      if (state.accumulated > totalAll){
+        state.accumulated = totalAll;
+        changed = true;
+      }
+      if (changed) saveSumState(state);
+
+      const newSince = Math.max(0, totalAll - state.snapshotTotal);
+
+      $("sumAllPer").innerText = won(newSince); // ✅ 개인당 총합(이번분)
+      $("prevSum").innerText = won(state.accumulated);
+      $("newSum").innerText = won(newSince);
+      $("nextSum").innerText = won(state.accumulated + newSince);
+
+      // ✅ 이번분이 0이면 버튼 비활성화(원하면 켜둬도 됨)
+      $("refreshSumBtn").disabled = (newSince <= 0);
+    }
+
+    // ✅ 새로고침(확정): 이번분을 확정 누적에 더하고 스냅샷 갱신
+    function refreshSum(){
+      const totalAll = getTotalAll();
+      const state = loadSumState();
+      const newSince = Math.max(0, totalAll - state.snapshotTotal);
+
+      if (newSince <= 0){
+        updateSumUI();
+        return;
+      }
+
+      state.accumulated = (state.accumulated || 0) + newSince;
+      state.snapshotTotal = totalAll;
+      saveSumState(state);
+
+      updateSumUI();
+      alert("새로 저장된 금액을 누적 총합에 합산했어!");
+    }
+
+    function resetSumState(){
+      localStorage.removeItem(SUM_STATE_KEY);
+      updateSumUI();
     }
 
     function ensureMemoDefault(){
@@ -556,6 +638,7 @@ ${perLine}`;
       $("calcTime").innerText = lastCalc.createdAt ? `계산 시각: ${lastCalc.createdAt.split(" ")[1]}` : "";
       renderResult(lastCalc);
       renderHistory();
+      updateSumUI();
     }
 
     async function copyKakao(){
@@ -692,7 +775,7 @@ ${perLine}`;
       list.unshift(lastCalc);
       saveHistory(list.slice(0, 50));
       renderHistory();
-      updateAllPerShareTotal();
+      updateSumUI();
       alert("저장 완료!");
     }
 
@@ -700,18 +783,19 @@ ${perLine}`;
       const list = loadHistory().filter(x => x && x.id !== id);
       saveHistory(list);
       renderHistory();
-      updateAllPerShareTotal();
+      updateSumUI();
     }
 
     function clearAll(){
       const ok = confirm("저장된 정산을 전부 삭제할까?");
       if (!ok) return;
       localStorage.removeItem(STORAGE_KEY);
+      resetSumState(); // ✅ 전체삭제면 새로고침 누적상태도 초기화
       renderHistory();
-      updateAllPerShareTotal();
+      updateSumUI();
     }
 
-    // ✅ 핵심: 불러오기(폼 채우기 + 결과를 2번사진처럼 즉시 표시)
+    // ✅ 불러오기: 폼 채우고 결과 즉시 표시
     function fillFormFrom(calc){
       $("memo").value = calc.memo || "";
       $("kg1").value = (calc.kg1 ?? "");
@@ -729,7 +813,6 @@ ${perLine}`;
       $("food").value = nfmtInt(calc.food ?? 0);
       $("divideBy").value = (calc.divideBy ?? 4.5);
 
-      // 저장된 데이터가 누락된 케이스까지 안전하게 보정
       const nakjiTotal = (calc.nakjiTotal ?? ((calc.total1 ?? 0) + (calc.total2 ?? 0)));
       const coopFee = (calc.coopFee ?? (nakjiTotal * 0.05));
       const iceCost = (calc.iceCost ?? ((calc.iceBoxes ?? 0) * (calc.iceUnit ?? 0)));
@@ -751,7 +834,7 @@ ${perLine}`;
 
       $("calcTime").innerText = lastCalc.createdAt ? `계산 시각: ${String(lastCalc.createdAt).split(" ")[1] || ""}` : "";
       renderResult(lastCalc);
-      updateAllPerShareTotal();
+      updateSumUI();
 
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -791,7 +874,7 @@ ${perLine}`;
         wrap.appendChild(el);
       });
 
-      // ✅ 버튼 동작(불러오기/복사/삭제) 이벤트 위임: 이게 빠지면 “아무것도 안됨”
+      // ✅ 이벤트 위임(불러오기/복사/삭제)
       wrap.onclick = async (e) => {
         const btn = e.target.closest("button");
         if (!btn) return;
@@ -803,11 +886,11 @@ ${perLine}`;
         if (!found) return;
 
         if (act === "load"){
-          fillFormFrom(found);              // ✅ 2번 사진처럼 바로 결과 표시
+          fillFormFrom(found);
         } else if (act === "del"){
-          deleteOne(id);                    // ✅ 삭제 정상
+          deleteOne(id);
         } else if (act === "copy"){
-          const text = buildText(found);    // ✅ 해당 저장건 그대로 복사
+          const text = buildText(found);
           try{
             await navigator.clipboard.writeText(text);
             alert("복사 완료!");
@@ -837,6 +920,8 @@ ${perLine}`;
     $("saveBtn").addEventListener("click", saveCurrent);
     $("clearAllBtn").addEventListener("click", clearAll);
 
+    $("refreshSumBtn").addEventListener("click", refreshSum); // ✅ 새로고침(확정)
+
     $("pdfBtn").addEventListener("click", savePDF);
 
     $("pngBtn").addEventListener("click", savePNG);
@@ -861,7 +946,7 @@ ${perLine}`;
     attachCommaInput($("food"));
 
     renderHistory();
-    updateAllPerShareTotal();
+    updateSumUI(); // ✅ 초기 표시
     $("divideBy").value = 4.5;
   </script>
 </body>
