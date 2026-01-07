@@ -25,6 +25,7 @@
       --ghostLine:#d1d1d6;
       --tagBg:#f2f2f7;
       --tagLine:#e5e5ea;
+      --danger:#ff3b30;
     }
 
     @media (prefers-color-scheme: dark){
@@ -42,6 +43,7 @@
         --ghostLine:#3a3a3c;
         --tagBg:#1c1c1e;
         --tagLine:#3a3a3c;
+        --danger:#ff453a;
       }
     }
 
@@ -105,10 +107,7 @@
     button:disabled{ opacity:0.6; }
 
     .primary{ background: var(--primary); color:#fff; }
-
-    /* ✅ 여기만 핵심 수정: 라이트모드에서 검정 배경이니까 글씨는 흰색 */
     .secondary{ background: var(--secondary); color:#fff; }
-
     @media (prefers-color-scheme: dark){
       .secondary{ background: #f5f5f7; color:#000; }
     }
@@ -183,24 +182,6 @@
       flex-wrap:wrap;
     }
 
-    /* 요약 카드 */
-    .summaryGrid{
-      display:grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap:10px;
-    }
-    @media (max-width:720px){
-      .summaryGrid{ grid-template-columns: repeat(2, 1fr); }
-    }
-    .summaryItem{
-      background: var(--card2);
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:10px;
-    }
-    .summaryLabel{ font-size:12px; color: var(--muted); }
-    .summaryValue{ font-size:16px; font-weight:800; margin-top:2px; }
-
     /* 개인당 강조 모드 */
     .bigPerShare .result{ font-size:15px; }
     .bigPerShare .perShareLine{
@@ -247,6 +228,25 @@
       font-weight:700;
     }
 
+    /* ✅ 상단 1줄: 개인당 총합 */
+    .topTotalLine{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background: var(--card2);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px;
+    }
+    .topTotalLabel{ font-weight:800; }
+    .topTotalValue{
+      font-weight:900;
+      color: var(--danger);
+      font-size:20px;
+      white-space:nowrap;
+    }
+
     /* 인쇄/PDF */
     @media print{
       body{ max-width:none; margin:0; padding:0; }
@@ -260,26 +260,11 @@
 <body>
   <h1>낙지잡이</h1>
 
-  <!-- 요약 카드 -->
+  <!-- ✅ (추가) 저장된 정산 기준: 날짜별 개인당 누적 → 그걸 전부 더한 개인당 총합 1줄 -->
   <div class="card">
-    <div class="sectionTitle">정산 요약</div>
-    <div class="summaryGrid" id="summaryGrid">
-      <div class="summaryItem">
-        <div class="summaryLabel">낙지총합</div>
-        <div class="summaryValue" id="sumNakji">0원</div>
-      </div>
-      <div class="summaryItem">
-        <div class="summaryLabel">총경비</div>
-        <div class="summaryValue" id="sumCost">0원</div>
-      </div>
-      <div class="summaryItem">
-        <div class="summaryLabel">최종합계</div>
-        <div class="summaryValue" id="sumFinal">0원</div>
-      </div>
-      <div class="summaryItem">
-        <div class="summaryLabel">개인당</div>
-        <div class="summaryValue" id="sumPer">0원</div>
-      </div>
+    <div class="topTotalLine">
+      <div class="topTotalLabel">개인당 총합</div>
+      <div class="topTotalValue" id="sumAllPer">0원</div>
     </div>
 
     <div style="margin-top:10px; display:flex; justify-content:space-between; gap:10px; align-items:center;">
@@ -295,29 +280,6 @@
     <div class="btnRow two noPrint">
       <button class="ghost" id="lockBtn">계산 잠금</button>
       <button class="ghost" id="unlockBtn" style="display:none;">잠금 해제</button>
-    </div>
-
-    <div class="cardInner" style="margin-top:10px;">
-      <div class="sectionTitle">개인당 반올림</div>
-      <div class="grid2 noPrint">
-        <button class="ghost" id="roundNoneBtn">반올림 없음</button>
-        <button class="ghost" id="round100Btn">100원 단위</button>
-        <button class="ghost" id="round1000Btn">1,000원 단위</button>
-        <button class="ghost" id="round10kBtn">10,000원 단위</button>
-      </div>
-    </div>
-
-    <div class="cardInner" style="margin-top:10px;">
-      <div class="sectionTitle">결과 문구 형식</div>
-      <div class="row noPrint">
-        <div>
-          <label>출력 형식</label>
-          <select id="textMode">
-            <option value="kakao">카톡용(줄 간격 넓게)</option>
-            <option value="print">인쇄·PDF용(정리된 느낌)</option>
-          </select>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -449,7 +411,6 @@
     let lastCalc = null;
 
     let bigPerShare = false;
-    let roundMode = "none";
     let locked = false;
     let lastImageDataUrl = "";
 
@@ -468,14 +429,6 @@
     }
     function nfmtInt(x){
       return Math.round(x).toLocaleString("ko-KR");
-    }
-
-    function roundPerShare(v){
-      if (!Number.isFinite(v)) return 0;
-      if (roundMode === "100") return Math.round(v / 100) * 100;
-      if (roundMode === "1000") return Math.round(v / 1000) * 1000;
-      if (roundMode === "10000") return Math.round(v / 10000) * 10000;
-      return v;
     }
 
     function attachCommaInput(el){
@@ -511,38 +464,48 @@
       return `${yyyy}/${mm}/${dd}`;
     }
 
-    function updateSummary(calc){
-      $("sumNakji").innerText = won(calc.nakjiTotal);
-      $("sumCost").innerText  = won(calc.totalCost);
-      $("sumFinal").innerText = won(calc.finalTotal);
-      $("sumPer").innerText   = won(calc.perShareRounded);
-      $("calcTime").innerText = calc.createdAt ? `계산 시각: ${calc.createdAt.split(" ")[1]}` : "";
+    // ✅ 날짜키 추출: memo에 날짜 있으면 그걸 우선, 없으면 createdAt 날짜
+    function extractDateKey(item){
+      const memo = String(item?.memo || "");
+      let m = memo.match(/(\d{4})[\/-](\d{2})[\/-](\d{2})/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+      const createdAt = String(item?.createdAt || "");
+      m = createdAt.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+      return "기타";
     }
 
-    function buildText(calc, mode){
+    // ✅ 저장된 정산: 날짜별 개인당 합계로 먼저 묶고 → 그걸 전부 더한 총합
+    function calcAllPerShareTotalFromHistory(){
+      const list = loadHistory();
+      const byDate = {};
+      list.forEach(item => {
+        const key = extractDateKey(item);
+        const per = Number(item?.perShareRounded ?? item?.perShare ?? 0) || 0;
+        byDate[key] = (byDate[key] || 0) + per;
+      });
+
+      let total = 0;
+      Object.keys(byDate).forEach(k => total += byDate[k] || 0);
+      return total;
+    }
+
+    function updateAllPerShareTotal(){
+      $("sumAllPer").innerText = won(calcAllPerShareTotalFromHistory());
+    }
+
+    function ensureMemoDefault(){
+      const m = $("memo").value.trim();
+      if (!m) $("memo").value = `${nowYMD()} 정산`;
+    }
+
+    // ✅ 결과 문구 형식 기능 삭제: buildText는 1가지 고정(카톡용)
+    function buildText(calc){
       const memoLine = calc.memo ? `메모: ${calc.memo}\n` : "";
       const timeLine = calc.createdAt ? `시간: ${calc.createdAt}\n` : "";
       const perLine = `개인당: 최종합계 ÷ ${calc.divideBy} = ${won(calc.perShareRounded)}`;
-
-      if (mode === "print"){
-        return `[낙지잡이 정산]
-${timeLine}${memoLine}
-[매출]
-낙지1  ${calc.kg1}kg  ×  ${nfmtInt(calc.price1)}원  =  ${won(calc.total1)}
-낙지2  ${calc.kg2}kg  ×  ${nfmtInt(calc.price2)}원  =  ${won(calc.total2)}
-낙지총합  =  ${won(calc.nakjiTotal)}
-
-[경비]
-입감  ${calc.iceBoxes}박스  ×  ${nfmtInt(calc.iceUnit)}원  =  ${won(calc.iceCost)}
-기름  ${calc.fuelQty}  ×  ${nfmtInt(calc.fuelUnit)}원  =  ${won(calc.fuelCost)}
-수협수수료(5%)  =  ${won(calc.coopFee)}
-부식  =  ${won(calc.food)}
-총경비  =  ${won(calc.totalCost)}
-
-[정산]
-최종합계  =  ${won(calc.finalTotal)}
-${perLine}`;
-      }
 
       return `[낙지잡이 정산]
 ${timeLine}${memoLine}
@@ -561,14 +524,8 @@ ${timeLine}${memoLine}
 ${perLine}`;
     }
 
-    function ensureMemoDefault(){
-      const m = $("memo").value.trim();
-      if (!m) $("memo").value = `${nowYMD()} 정산`;
-    }
-
     function renderResult(calc){
-      const mode = $("textMode").value;
-      kakaoText = buildText(calc, mode);
+      kakaoText = buildText(calc);
 
       const perLine = `개인당: 최종합계 ÷ ${calc.divideBy} = ${won(calc.perShareRounded)}`;
       $("result").innerHTML = "";
@@ -615,7 +572,9 @@ ${perLine}`;
       const totalCost = iceCost + fuelCost + coopFee + food;
       const finalTotal = nakjiTotal - totalCost;
       const perShare = finalTotal / divideBy;
-      const perShareRounded = roundPerShare(perShare);
+
+      // ✅ 개인당 반올림 기능 삭제: 그대로 사용
+      const perShareRounded = perShare;
 
       const id = (crypto && crypto.randomUUID)
         ? crypto.randomUUID()
@@ -639,7 +598,8 @@ ${perLine}`;
         perShareRounded
       };
 
-      updateSummary(lastCalc);
+      $("calcTime").innerText = lastCalc.createdAt ? `계산 시각: ${lastCalc.createdAt.split(" ")[1]}` : "";
+
       renderResult(lastCalc);
       renderHistory();
     }
@@ -695,16 +655,17 @@ ${perLine}`;
       target.style.padding = "14px";
       target.style.background = getComputedStyle(document.body).backgroundColor;
 
-      const summaryClone = $("summaryGrid").closest(".card").cloneNode(true);
+      // ✅ 기존 summaryGrid clone 대신: 맨 위 카드(개인당 총합 카드)를 통째로 캡처
+      const topClone = document.querySelector(".card").cloneNode(true);
       const inputClone = $("inputCard").cloneNode(true);
 
-      summaryClone.querySelectorAll(".noPrint").forEach(el=>el.remove());
+      topClone.querySelectorAll(".noPrint").forEach(el=>el.remove());
       inputClone.querySelectorAll(".noPrint").forEach(el=>el.remove());
 
       const rf = inputClone.querySelector("#restoreFile");
       if (rf) rf.remove();
 
-      target.appendChild(summaryClone);
+      target.appendChild(topClone);
       target.appendChild(inputClone);
 
       target.style.position = "fixed";
@@ -836,6 +797,7 @@ ${perLine}`;
       list.unshift(lastCalc);
       saveHistory(list.slice(0, 50));
       renderHistory();
+      updateAllPerShareTotal();
       alert("저장 완료!");
     }
 
@@ -843,6 +805,7 @@ ${perLine}`;
       const list = loadHistory().filter(x => x && x.id !== id);
       saveHistory(list);
       renderHistory();
+      updateAllPerShareTotal();
     }
 
     function clearAll(){
@@ -850,6 +813,7 @@ ${perLine}`;
       if (!ok) return;
       localStorage.removeItem(STORAGE_KEY);
       renderHistory();
+      updateAllPerShareTotal();
     }
 
     function fillFormFrom(calc){
@@ -869,7 +833,8 @@ ${perLine}`;
       $("food").value = nfmtInt(calc.food ?? 0);
       $("divideBy").value = (calc.divideBy ?? 4.5);
 
-      const per = calc.perShareRounded ?? roundPerShare(calc.perShare ?? 0);
+      const per = (calc.perShareRounded ?? calc.perShare ?? 0);
+
       lastCalc = {
         ...calc,
         perShareRounded: per,
@@ -877,8 +842,10 @@ ${perLine}`;
         finalTotal: calc.finalTotal ?? (calc.nakjiTotal - (calc.iceCost + calc.fuelCost + (calc.nakjiTotal*0.05) + calc.food)),
       };
 
-      updateSummary(lastCalc);
+      $("calcTime").innerText = lastCalc.createdAt ? `계산 시각: ${String(lastCalc.createdAt).split(" ")[1] || ""}` : "";
+
       renderResult(lastCalc);
+      updateAllPerShareTotal();
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
@@ -895,7 +862,7 @@ ${perLine}`;
       list.forEach((item) => {
         const title = item.memo ? item.memo : "정산";
         const time = item.createdAt ? item.createdAt : "";
-        const per = item.perShareRounded ?? roundPerShare(item.perShare ?? 0);
+        const per = (item.perShareRounded ?? item.perShare ?? 0);
         const summary = `낙지총합 ${won(item.nakjiTotal)} / 최종 ${won(item.finalTotal)} / 개인당 ${won(per)}`;
 
         const el = document.createElement("div");
@@ -932,8 +899,7 @@ ${perLine}`;
         } else if (act === "del"){
           deleteOne(id);
         } else if (act === "copy"){
-          const mode = $("textMode").value;
-          const text = buildText(found, mode);
+          const text = buildText(found);
           try{
             await navigator.clipboard.writeText(text);
             alert("복사 완료!");
@@ -952,7 +918,7 @@ ${perLine}`;
 
     function setLocked(on){
       locked = on;
-      const inputs = ["memo","kg1","price1","kg2","price2","iceBoxes","iceUnit","fuelQty","fuelUnit","food","divideBy","textMode"];
+      const inputs = ["memo","kg1","price1","kg2","price2","iceBoxes","iceUnit","fuelQty","fuelUnit","food","divideBy"];
       inputs.forEach(id=>{
         const el = $(id);
         if (el) el.disabled = on;
@@ -966,11 +932,6 @@ ${perLine}`;
       $("saveBtn").disabled = on;
       $("pngBtn").disabled = false;
       $("kakaoImgBtn").disabled = false;
-    }
-
-    function setRound(mode){
-      roundMode = mode;
-      if (lastCalc) calculate();
     }
 
     function backupJSON(){
@@ -998,6 +959,7 @@ ${perLine}`;
           if (!Array.isArray(data)) throw new Error("형식 오류");
           saveHistory(data.slice(0, 50));
           renderHistory();
+          updateAllPerShareTotal();
           alert("복원 완료!");
         }catch(e){
           alert("복원 실패: JSON 파일이 올바르지 않아.");
@@ -1045,11 +1007,6 @@ ${perLine}`;
     $("recentBtn").addEventListener("click", loadRecentOne);
     $("toggleBigBtn").addEventListener("click", toggleBig);
 
-    $("roundNoneBtn").addEventListener("click", ()=> setRound("none"));
-    $("round100Btn").addEventListener("click", ()=> setRound("100"));
-    $("round1000Btn").addEventListener("click", ()=> setRound("1000"));
-    $("round10kBtn").addEventListener("click", ()=> setRound("10000"));
-
     $("lockBtn").addEventListener("click", ()=> setLocked(true));
     $("unlockBtn").addEventListener("click", ()=> setLocked(false));
 
@@ -1072,8 +1029,7 @@ ${perLine}`;
     attachCommaInput($("food"));
 
     renderHistory();
-
-    $("textMode").addEventListener("change", ()=>{ if (lastCalc) calculate(); });
+    updateAllPerShareTotal();
 
     $("divideBy").value = 4.5;
   </script>
