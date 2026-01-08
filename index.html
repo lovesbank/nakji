@@ -204,8 +204,7 @@
     }
 
     /* =========================================================
-       ✅✅✅ 상단 3줄 UI (사진처럼) + 숫자 안 잘리게 + "원" 표시
-       - 로직(JS)은 그대로, UI/CSS만 변경
+       ✅ 상단 3줄 UI + 숫자 안 잘리게 + "원" 표시
     ========================================================= */
 
     .topTotalWrap{
@@ -215,9 +214,7 @@
       padding:12px;
     }
 
-    .topBlock{
-      margin-bottom:12px;
-    }
+    .topBlock{ margin-bottom:12px; }
     .topBlock:last-child{ margin-bottom:0; }
 
     .topLabel{
@@ -230,7 +227,7 @@
 
     .moneyRow{
       display:grid;
-      grid-template-columns: auto minmax(0,1fr) auto; /* ✅ 핵심: 숫자 잘림 방지 */
+      grid-template-columns: auto minmax(0,1fr) auto; /* ✅ 핵심 */
       align-items:center;
       gap:8px;
       border:1px solid var(--ghostLine);
@@ -250,7 +247,7 @@
       text-align:right;
       font-weight:900;
       font-size:22px;
-      letter-spacing:-0.3px;    /* 폭 살짝 줄여서 끝자리 확보 */
+      letter-spacing:-0.3px;
       color: var(--text);
     }
     .moneyInput.red{ color: var(--danger); }
@@ -268,10 +265,9 @@
     }
     .topRowTwo .col{
       flex:1;
-      min-width:0; /* ✅ 내부 grid/minmax가 제대로 동작하게 */
+      min-width:0;
     }
 
-    /* 아래 2칸은 글씨/패딩 살짝 컴팩트 */
     .topRowTwo .moneyRow{
       padding:12px 12px;
       border-radius:22px;
@@ -279,7 +275,6 @@
     .topRowTwo .moneyInput{ font-size:20px; }
     .topRowTwo .wonSuffix{ font-size:20px; }
 
-    /* ✅ 작은 화면(iPhone)에서는 더 줄여서 무조건 끝자리 보이게 */
     @media (max-width: 430px){
       .moneyInput{ font-size:20px; }
       .wonSuffix{ font-size:20px; }
@@ -306,7 +301,6 @@
       white-space:nowrap;
     }
 
-    /* 계산시각(원하면 표시) */
     #calcTime{
       margin-top:6px;
       text-align:right;
@@ -324,11 +318,10 @@
 <body>
   <h1>낙지잡이</h1>
 
-  <!-- ✅ 상단 총합(사진처럼 3줄) + 새로고침 + 되돌리기 -->
+  <!-- ✅ 상단 총합 -->
   <div class="card">
     <div class="topTotalWrap">
 
-      <!-- 1줄: 개인당 총합 -->
       <div class="topBlock">
         <div class="topLabel">개인당 총합</div>
         <div class="moneyRow">
@@ -338,7 +331,6 @@
         </div>
       </div>
 
-      <!-- 2줄: 이전 / 누적 -->
       <div class="topBlock topRowTwo">
         <div class="col">
           <div class="topLabel">이전 총합</div>
@@ -359,7 +351,6 @@
         </div>
       </div>
 
-      <!-- 3줄: 버튼 -->
       <div class="topBtnRow noPrint">
         <button id="refreshTotalsBtn" type="button">새로고침</button>
         <button id="undoTotalsBtn" type="button">이전값 되돌리기</button>
@@ -472,7 +463,6 @@
     </div>
   </div>
 
-  <!-- 라이브러리: PNG 캡처 -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
   <script>
@@ -480,14 +470,15 @@
 
     const STORAGE_KEY = "nakji_settlements_final_split_v1";
 
-    /* ✅ 상단 총합 저장 */
-    const TOTALS_KEY = "nakji_totals_v1";           // { prev:number, curr:number, sum:number }
-    const TOTALS_UNDO_KEY = "nakji_totals_undo_v1"; // { prev:number, curr:number, sum:number, savedAt:number }
+    const TOTALS_KEY = "nakji_totals_v1";
+    const TOTALS_UNDO_KEY = "nakji_totals_undo_v1";
 
     let kakaoText = "";
     let lastCalc = null;
 
-    let editingId = null; // ✅ 불러온 항목을 수정 저장할 때 같은 위치 덮어쓰기
+    // ✅ 불러오기 후 "그 자리"로 덮어쓰기 위해 두 값 모두 기억
+    let editingId = null;
+    let editingIndex = null;
 
     let locked = false;
     let lastImageDataUrl = "";
@@ -508,7 +499,6 @@
     function nfmtInt(x){
       return Math.round(x).toLocaleString("ko-KR");
     }
-    // ✅ 천원단위 반올림
     function roundTo1000(x){
       const v = Number(x) || 0;
       return Math.round(v / 1000) * 1000;
@@ -560,7 +550,6 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
     }
 
-    /* ✅ 상단 총합 로직(3칸 + 누적도 입력칸) */
     function loadTotals(){
       try{
         const raw = localStorage.getItem(TOTALS_KEY);
@@ -611,12 +600,10 @@
       }
     }
 
-    /* ✅✅✅ 저장된정산 기준으로 개인당총합(curr)을 항상 재계산 */
     function recomputeCurrTotalFromHistory(){
       const list = loadHistory();
       const t = loadTotals();
 
-      // 되돌리기 가능하게 스냅샷 저장
       saveUndoSnapshot(t.prev, t.curr, t.sum);
 
       const nextCurr = list.reduce((acc, it) => {
@@ -653,16 +640,6 @@
 
       saveTotals(prev, curr, sum);
       setTotalsUI(prev, curr, sum);
-    }
-
-    function addToCurrTotal(delta){
-      const t = loadTotals();
-      const nextCurr = (t.curr || 0) + (Number(delta)||0);
-      const nextPrev = (t.prev || 0);
-      const nextSum  = nextPrev + nextCurr;
-
-      saveTotals(nextPrev, nextCurr, nextSum);
-      setTotalsUI(nextPrev, nextCurr, nextSum);
     }
 
     function ensureMemoDefault(){
@@ -747,8 +724,8 @@ ${perLine}`;
         ? crypto.randomUUID()
         : (String(Date.now()) + "_" + Math.random().toString(16).slice(2));
 
-      // ✅ 편집중이면 id 새로 만들지 않고 유지 (혼동 방지)
-      const useId = editingId ? editingId : id;
+      // ✅ 불러온 수정중이면 id를 "원래 id"로 유지
+      const useId = (editingId !== null) ? editingId : id;
 
       lastCalc = {
         id: useId,
@@ -899,38 +876,69 @@ ${perLine}`;
       alert("기기/브라우저 제한으로 파일 공유가 안 돼서, 이미지 탭을 열었어. 공유에서 카톡을 선택해줘(링크로 갈 수도 있어).");
     }
 
-    // ✅ 저장: 불러온 상태(editingId)면 같은 위치 덮어쓰기, 아니면 새로 저장
+    // ✅✅✅ 저장: 불러온 건은 "원래 자리"에 무조건 덮어쓰기
     function saveCurrent(){
       if (!lastCalc) calculate();
       if (!lastCalc) return;
 
       const list = loadHistory();
 
-      if (editingId){
-        const idx = list.findIndex(x => x && x.id === editingId);
-        if (idx >= 0){
-          const keep = list[idx];
+      // 1순위: 인덱스로 덮어쓰기(가장 확실)
+      const idx = Number(editingIndex);
+      if (editingId !== null && Number.isInteger(idx) && idx >= 0 && idx < list.length){
+        const keep = list[idx];
+        // 혹시 그 사이에 목록이 바뀌었으면 id로 한번 더 안전 확인
+        if (keep && keep.id === editingId){
           list[idx] = {
             ...keep,
             ...lastCalc,
-            id: keep.id,
+            id: keep.id,            // ✅ id 유지
+            createdAt: nowLabel()   // ✅ 저장 시각 갱신
+          };
+          saveHistory(list);
+          renderHistory();
+          recomputeCurrTotalFromHistory();
+
+          editingId = null;
+          editingIndex = null;
+
+          alert("수정 저장 완료!");
+          return;
+        }
+      }
+
+      // 2순위: 혹시 인덱스가 어긋났으면 id로 찾아 덮어쓰기
+      if (editingId !== null){
+        const idx2 = list.findIndex(x => x && x.id === editingId);
+        if (idx2 >= 0){
+          const keep2 = list[idx2];
+          list[idx2] = {
+            ...keep2,
+            ...lastCalc,
+            id: keep2.id,
             createdAt: nowLabel()
           };
           saveHistory(list);
           renderHistory();
-          recomputeCurrTotalFromHistory(); // ✅ 개인당총합 즉시 반영
+          recomputeCurrTotalFromHistory();
+
           editingId = null;
+          editingIndex = null;
+
           alert("수정 저장 완료!");
           return;
-        } else {
-          editingId = null; // 혹시 못찾으면 일반 저장으로
         }
       }
 
+      // 3순위: 그 외는 새로 저장
       list.unshift(lastCalc);
       saveHistory(list.slice(0, 50));
       renderHistory();
       recomputeCurrTotalFromHistory();
+
+      editingId = null;
+      editingIndex = null;
+
       alert("저장 완료!");
     }
 
@@ -939,6 +947,12 @@ ${perLine}`;
       saveHistory(list);
       renderHistory();
       recomputeCurrTotalFromHistory();
+
+      // 삭제로 인해 인덱스가 꼬일 수 있으니 편집상태 해제
+      if (editingId === id){
+        editingId = null;
+        editingIndex = null;
+      }
     }
 
     function clearAll(){
@@ -948,10 +962,15 @@ ${perLine}`;
       localStorage.removeItem(STORAGE_KEY);
       renderHistory();
       recomputeCurrTotalFromHistory();
+
+      editingId = null;
+      editingIndex = null;
     }
 
-    function fillFormFrom(calc){
-      editingId = calc.id; // ✅ 지금 불러온 저장건을 수정 저장하면 같은 위치 덮어씀
+    // ✅ 불러오기: id + index 둘 다 기억
+    function fillFormFrom(calc, idx){
+      editingId = calc.id;
+      editingIndex = Number(idx);
 
       $("memo").value = calc.memo || "";
       $("kg1").value = (calc.kg1 ?? "");
@@ -976,7 +995,6 @@ ${perLine}`;
       const totalCost = (calc.totalCost ?? (iceCost + fuelCost + coopFee + (calc.food ?? 0)));
       const finalTotal = (calc.finalTotal ?? (nakjiTotal - totalCost));
 
-      // ✅ 기존 저장건에 perShareRounded(천원반올림 저장 값)이 있으면 그걸 유지
       const perShare = (calc.perShareRounded ?? calc.perShare ?? (finalTotal / (calc.divideBy ?? 1)));
 
       lastCalc = {
@@ -1006,7 +1024,7 @@ ${perLine}`;
       }
 
       wrap.innerHTML = "";
-      list.forEach((item) => {
+      list.forEach((item, index) => {
         const title = item.memo ? item.memo : "정산";
         const time = item.createdAt ? item.createdAt : "";
         const per = (item.perShareRounded ?? item.perShare ?? 0);
@@ -1023,7 +1041,7 @@ ${perLine}`;
             </div>
           </div>
           <div class="miniRow noPrint">
-            <button class="miniBtn" data-act="load" data-id="${item.id}">불러오기</button>
+            <button class="miniBtn" data-act="load" data-id="${item.id}" data-idx="${index}">불러오기</button>
             <button class="miniBtn" data-act="round1k" data-id="${item.id}">천원반올림</button>
             <button class="miniBtn" data-act="copy" data-id="${item.id}">복사</button>
             <button class="miniBtn" data-act="del" data-id="${item.id}">삭제</button>
@@ -1038,12 +1056,14 @@ ${perLine}`;
 
         const id = btn.getAttribute("data-id");
         const act = btn.getAttribute("data-act");
+        const idx = btn.getAttribute("data-idx");
+
         const list2 = loadHistory();
         const found = list2.find(x => x && x.id === id);
         if (!found) return;
 
         if (act === "load"){
-          fillFormFrom(found);
+          fillFormFrom(found, idx);
 
         } else if (act === "del"){
           deleteOne(id);
@@ -1058,7 +1078,6 @@ ${perLine}`;
           }
 
         } else if (act === "round1k"){
-          // ✅ 해당 저장건 개인당 금액을 천원단위 반올림 후 저장(덮어쓰기)
           const list3 = loadHistory();
           const idx3 = list3.findIndex(x => x && x.id === id);
           if (idx3 < 0) return;
@@ -1075,7 +1094,7 @@ ${perLine}`;
 
           saveHistory(list3);
           renderHistory();
-          recomputeCurrTotalFromHistory(); // ✅ 개인당총합 즉시 반영
+          recomputeCurrTotalFromHistory();
           alert("천원단위 반올림 저장 완료!");
         }
       };
@@ -1167,7 +1186,6 @@ ${perLine}`;
     const t0 = loadTotals();
     setTotalsUI(t0.prev, t0.curr, t0.sum);
 
-    /* ✅ 첫 로드에도 혹시 히스토리와 totals가 어긋나면 자동 정렬 */
     recomputeCurrTotalFromHistory();
 
     $("divideBy").value = 4.5;
