@@ -203,7 +203,7 @@
       font-weight:700;
     }
 
-    /* ✅ 상단 총합: 3칸 가로로 꽉(줄바꿈 안 함) */
+    /* ✅ 상단 총합: 세줄(세로) + 칸 가로폭 최대 */
     .topTotalLine{
       background: var(--card2);
       border:1px solid var(--line);
@@ -212,34 +212,33 @@
     }
     .topTotals3{
       display:flex;
-      gap:8px;
+      flex-direction:column; /* ✅ 세 줄 */
+      gap:10px;
       width:100%;
-      flex-wrap:nowrap; /* ✅ 무조건 가로 유지 */
     }
     .topBox{
-      flex:1 1 0;
-      min-width:0;
+      width:100%;
       border:1px solid var(--ghostLine);
       background: var(--ghostBg);
       border-radius:14px;
-      padding:10px 10px;
+      padding:14px;
     }
     .topBoxLabel{
       font-weight:900;
-      font-size:16px;
+      font-size:18px;
       line-height:1.1;
-      margin-bottom:8px;
+      margin-bottom:10px;
       white-space:nowrap;
     }
     .topBoxInput{
       width:100%;
       margin:0;
-      padding:10px 10px;
-      border-radius:12px;
+      padding:14px;
+      border-radius:14px;
       border:1px solid var(--ghostLine);
       background: var(--card2);
       font-weight:900;
-      font-size:22px;
+      font-size:26px;
       text-align:right;
       color: var(--text); /* ✅ 숫자 기본 검정 */
     }
@@ -280,7 +279,7 @@
 <body>
   <h1>낙지잡이</h1>
 
-  <!-- ✅ 상단 총합(3칸 가로) + 새로고침 + 되돌리기 -->
+  <!-- ✅ 상단 총합(세줄) + 새로고침 + 되돌리기 -->
   <div class="card">
     <div class="topTotalLine">
       <div class="topTotals3">
@@ -296,7 +295,6 @@
 
         <div class="topBox">
           <div class="topBoxLabel">누적 총합</div>
-          <!-- ✅ 누적총합도 입력칸(검정) -->
           <input class="topBoxInput" id="sumAllPer" type="text" inputmode="numeric" value="0" />
         </div>
       </div>
@@ -501,7 +499,6 @@
         const prev = Number(obj?.prev ?? 0) || 0;
         const curr = Number(obj?.curr ?? 0) || 0;
         let sum = Number(obj?.sum ?? (prev + curr)) || 0;
-        // 저장값이 없거나 꼬였으면 일관되게 보정
         if (!Number.isFinite(sum)) sum = prev + curr;
         return { prev, curr, sum };
       }catch(e){
@@ -545,7 +542,6 @@
       }
     }
 
-    // ✅ prev/curr 수정 → sum 자동 = prev+curr
     function syncSumFromPrevCurr(){
       const t = loadTotals();
       saveUndoSnapshot(t.prev, t.curr, t.sum);
@@ -558,7 +554,6 @@
       setTotalsUI(prev, curr, sum);
     }
 
-    // ✅ sum 수정 → prev 자동 = sum - curr (일관 유지)
     function syncPrevFromSum(){
       const t = loadTotals();
       saveUndoSnapshot(t.prev, t.curr, t.sum);
@@ -840,7 +835,6 @@ ${perLine}`;
       renderHistory();
     }
 
-    // ✅ 불러오기
     function fillFormFrom(calc){
       $("memo").value = calc.memo || "";
       $("kg1").value = (calc.kg1 ?? "");
@@ -958,7 +952,6 @@ ${perLine}`;
       if (lastCalc) calculate();
     }
 
-    /* ✅ 새로고침: (prev+curr)=sum으로 확정시키고 curr=0, sum도 prev+0으로 맞춤 */
     function refreshTotals(){
       const ok = confirm("정말 새로고침할까요?\n(개인당 총합이 0으로 초기화되고, 누적은 이전 총합으로 확정됩니다)");
       if (!ok) return;
@@ -974,7 +967,6 @@ ${perLine}`;
       setTotalsUI(nextPrev, nextCurr, nextSum);
     }
 
-    /* ✅ 이전값 되돌리기 */
     function undoTotals(){
       const snap = loadUndoSnapshot();
       if (!snap){
@@ -1016,7 +1008,6 @@ ${perLine}`;
     attachCommaInput($("fuelUnit"));
     attachCommaInput($("food"));
 
-    /* ✅ 상단 3칸 입력 콤마 + 동기화(수정도 되돌리기 가능) */
     attachCommaInput($("prevTotal"));
     attachCommaInput($("currTotal"));
     attachCommaInput($("sumAllPer"));
@@ -1030,7 +1021,6 @@ ${perLine}`;
 
     renderHistory();
 
-    /* ✅ 첫 로드시 상단 총합 복원 */
     const t0 = loadTotals();
     setTotalsUI(t0.prev, t0.curr, t0.sum);
 
