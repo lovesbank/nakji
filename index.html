@@ -212,7 +212,7 @@
     }
     .topTotals3{
       display:flex;
-      flex-direction:column; /* ✅ 세 줄 */
+      flex-direction:column;
       gap:10px;
       width:100%;
     }
@@ -240,10 +240,10 @@
       font-weight:900;
       font-size:26px;
       text-align:right;
-      color: var(--text); /* ✅ 숫자 기본 검정 */
+      color: var(--text);
     }
     .topBoxInput.red{
-      color: var(--danger); /* ✅ 개인당 총합만 빨강 */
+      color: var(--danger);
     }
 
     .topBtns{
@@ -428,6 +428,9 @@
     let locked = false;
     let lastImageDataUrl = "";
 
+    /* ✅✅✅ (추가) “불러오기 후 수정 저장”을 위한 편집 대상 id */
+    let editingId = null;
+
     function num(v){
       const x = Number(v);
       return Number.isFinite(x) ? x : 0;
@@ -542,6 +545,26 @@
       }
     }
 
+    /* ✅✅✅ 저장된정산 기준으로 개인당총합(curr)을 항상 재계산 */
+    function recomputeCurrTotalFromHistory(){
+      const list = loadHistory();
+      const t = loadTotals();
+
+      // 되돌리기 가능하게 스냅샷 저장
+      saveUndoSnapshot(t.prev, t.curr, t.sum);
+
+      const nextCurr = list.reduce((acc, it) => {
+        const v = Number(it?.perShareRounded ?? it?.perShare ?? 0) || 0;
+        return acc + v;
+      }, 0);
+
+      const nextPrev = Number(t.prev || 0);
+      const nextSum  = nextPrev + nextCurr;
+
+      saveTotals(nextPrev, nextCurr, nextSum);
+      setTotalsUI(nextPrev, nextCurr, nextSum);
+    }
+
     function syncSumFromPrevCurr(){
       const t = loadTotals();
       saveUndoSnapshot(t.prev, t.curr, t.sum);
@@ -564,16 +587,6 @@
 
       saveTotals(prev, curr, sum);
       setTotalsUI(prev, curr, sum);
-    }
-
-    function addToCurrTotal(delta){
-      const t = loadTotals();
-      const nextCurr = (t.curr || 0) + (Number(delta)||0);
-      const nextPrev = (t.prev || 0);
-      const nextSum  = nextPrev + nextCurr;
-
-      saveTotals(nextPrev, nextCurr, nextSum);
-      setTotalsUI(nextPrev, nextCurr, nextSum);
     }
 
     function ensureMemoDefault(){
@@ -807,17 +820,43 @@ ${perLine}`;
       alert("기기/브라우저 제한으로 파일 공유가 안 돼서, 이미지 탭을 열었어. 공유에서 카톡을 선택해줘(링크로 갈 수도 있어).");
     }
 
+    /* ✅✅✅ (수정) 불러온 항목(editingId)이 있으면 “그 자리”에 덮어쓰기 저장 */
     function saveCurrent(){
       if (!lastCalc) calculate();
       if (!lastCalc) return;
 
       const list = loadHistory();
+
+      if (editingId){
+        const idx = list.findIndex(x => x && x.id === editingId);
+        if (idx >= 0){
+          const orig = list[idx];
+
+          // 같은 항목으로 덮어쓰기: id/createdAt 유지(자리/날짜 유지)
+          lastCalc.id = editingId;
+          lastCalc.createdAt = orig.createdAt;
+
+          list[idx] = lastCalc;
+          saveHistory(list.slice(0, 50));
+          renderHistory();
+
+          // 저장 후 totals은 “히스토리 합”으로 재계산
+          recomputeCurrTotalFromHistory();
+
+          editingId = null;
+          alert("수정 저장 완료!");
+          return;
+        }
+        // 혹시 못 찾으면(비정상) 신규로 저장
+        editingId = null;
+      }
+
+      // 신규 저장: 맨 위에 추가
       list.unshift(lastCalc);
       saveHistory(list.slice(0, 50));
       renderHistory();
 
-      /* ✅ 저장하면 상단 “개인당 총합”에 자동 누적 */
-      addToCurrTotal(Number(lastCalc.perShareRounded) || 0);
+      recomputeCurrTotalFromHistory();
 
       alert("저장 완료!");
     }
@@ -826,16 +865,30 @@ ${perLine}`;
       const list = loadHistory().filter(x => x && x.id !== id);
       saveHistory(list);
       renderHistory();
+
+      // 삭제되면 totals도 같이 변해야 함
+      recomputeCurrTotalFromHistory();
+
+      // 삭제한 게 편집 중이던 항목이면 편집모드 해제
+      if (editingId === id) editingId = null;
     }
 
     function clearAll(){
       const ok = confirm("저장된 정산을 전부 삭제할까?");
       if (!ok) return;
+
       localStorage.removeItem(STORAGE_KEY);
       renderHistory();
+
+      recomputeCurrTotalFromHistory();
+      editingId = null;
     }
 
+    // ✅ 불러오기
     function fillFormFrom(calc){
+      // ✅✅✅ (추가) 이 항목을 “편집 대상”으로 기억
+      editingId = calc.id || null;
+
       $("memo").value = calc.memo || "";
       $("kg1").value = (calc.kg1 ?? "");
       $("price1").value = nfmtInt(calc.price1 ?? 0);
@@ -957,7 +1010,12 @@ ${perLine}`;
       if (!ok) return;
 
       const t = loadTotals();
-      saveUndoSnapshot(t.prev, t.curr, t.sum);
+      localStorage.setItem(TOTALS_UNDO_KEY, JSON.stringify({
+        prev: Number(t.prev)||0,
+        curr: Number(t.curr)||0,
+        sum: Number(t.sum)||0,
+        savedAt: Date.now()
+      }));
 
       const nextPrev = (t.prev || 0) + (t.curr || 0);
       const nextCurr = 0;
@@ -1023,6 +1081,9 @@ ${perLine}`;
 
     const t0 = loadTotals();
     setTotalsUI(t0.prev, t0.curr, t0.sum);
+
+    // 첫 로드에도 히스토리 기준으로 totals 정렬
+    recomputeCurrTotalFromHistory();
 
     $("divideBy").value = 4.5;
   </script>
