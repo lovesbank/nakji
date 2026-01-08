@@ -203,75 +203,113 @@
       font-weight:700;
     }
 
-    /* ✅ 상단 총합: 사진처럼(개인당 1줄 + 아래 2칸 + 버튼 2개) */
-    .topTotalLine{
+    /* =========================================================
+       ✅✅✅ 상단 3줄 UI (사진처럼) + 숫자 안 잘리게 + "원" 표시
+       - 로직(JS)은 그대로, UI/CSS만 변경
+    ========================================================= */
+
+    .topTotalWrap{
       background: var(--card2);
       border:1px solid var(--line);
       border-radius:14px;
-      padding:14px;
+      padding:12px;
     }
-    .topTotalsNew{
-      display:flex;
-      flex-direction:column;
-      gap:14px;
+
+    .topBlock{
+      margin-bottom:12px;
     }
-    .topFieldLabel{
+    .topBlock:last-child{ margin-bottom:0; }
+
+    .topLabel{
       font-weight:900;
-      font-size:15px;
-      line-height:1.1;
+      font-size:18px;
+      line-height:1.2;
       margin-bottom:8px;
       white-space:nowrap;
     }
+
     .moneyRow{
       display:grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap:10px;
+      grid-template-columns: auto minmax(0,1fr) auto; /* ✅ 핵심: 숫자 잘림 방지 */
       align-items:center;
-    }
-    .moneyInput{
-      width:100%;
-      min-width:0; /* ✅ iOS에서도 숫자 잘림 방지 */
-      margin:0;
-      padding:10px 12px;
-      border-radius:12px;
+      gap:8px;
       border:1px solid var(--ghostLine);
       background: var(--ghostBg);
-      font-weight:900;
-      font-size:20px;
-      text-align:right;
-      color: var(--text);
+      border-radius:22px;
+      padding:12px 14px;
+    }
+
+    .moneyInput{
+      width:100%;
+      min-width:0;              /* ✅ 핵심 */
+      margin:0;
+      padding:0;
+      border:none;
+      background:transparent;
       outline:none;
+      text-align:right;
+      font-weight:900;
+      font-size:22px;
+      letter-spacing:-0.3px;    /* 폭 살짝 줄여서 끝자리 확보 */
+      color: var(--text);
     }
     .moneyInput.red{ color: var(--danger); }
+
     .wonSuffix{
+      font-weight:900;
+      font-size:22px;
+      white-space:nowrap;
+      padding-left:6px;
+    }
+
+    .topRowTwo{
+      display:flex;
+      gap:14px;
+    }
+    .topRowTwo .col{
+      flex:1;
+      min-width:0; /* ✅ 내부 grid/minmax가 제대로 동작하게 */
+    }
+
+    /* 아래 2칸은 글씨/패딩 살짝 컴팩트 */
+    .topRowTwo .moneyRow{
+      padding:12px 12px;
+      border-radius:22px;
+    }
+    .topRowTwo .moneyInput{ font-size:20px; }
+    .topRowTwo .wonSuffix{ font-size:20px; }
+
+    /* ✅ 작은 화면(iPhone)에서는 더 줄여서 무조건 끝자리 보이게 */
+    @media (max-width: 430px){
+      .moneyInput{ font-size:20px; }
+      .wonSuffix{ font-size:20px; }
+      .topRowTwo .moneyInput{ font-size:16px; }
+      .topRowTwo .wonSuffix{ font-size:16px; }
+      .topRowTwo{ gap:12px; }
+      .moneyRow{ gap:6px; padding:12px 12px; }
+    }
+
+    .topBtnRow{
+      display:flex;
+      gap:12px;
+      align-items:stretch;
+    }
+
+    .topBtnRow button{
+      margin-top:0;
+      border:1px solid var(--ghostLine);
+      background: var(--ghostBg);
+      border-radius:22px;
+      padding:16px 12px;
       font-weight:900;
       font-size:18px;
       white-space:nowrap;
-      color: var(--text);
-      opacity:0.9;
     }
-    .topRowTwo{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:14px;
-      width:100%;
-    }
-    .topBtnRow{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:14px;
-      width:100%;
-    }
-    .topBtn{
-      width:100%;
-      margin-top:0;
-      padding:12px;
-      border-radius:12px;
-      border:1px solid var(--ghostLine);
-      background: var(--ghostBg);
-      font-size:16px;
-      font-weight:900;
-      color: var(--text);
+
+    /* 계산시각(원하면 표시) */
+    #calcTime{
+      margin-top:6px;
+      text-align:right;
     }
 
     @media print{
@@ -286,49 +324,48 @@
 <body>
   <h1>낙지잡이</h1>
 
-  <!-- ✅ 상단 총합(사진처럼) -->
+  <!-- ✅ 상단 총합(사진처럼 3줄) + 새로고침 + 되돌리기 -->
   <div class="card">
-    <div class="topTotalLine">
-      <div class="topTotalsNew">
+    <div class="topTotalWrap">
 
-        <!-- 1행: 개인당 총합 -->
-        <div class="topRowOne">
-          <div class="topFieldLabel">개인당 총합</div>
-          <div class="moneyRow">
-            <input class="moneyInput red" id="currTotal" type="text" inputmode="numeric" value="0" />
-            <span class="wonSuffix">원</span>
-          </div>
+      <!-- 1줄: 개인당 총합 -->
+      <div class="topBlock">
+        <div class="topLabel">개인당 총합</div>
+        <div class="moneyRow">
+          <div></div>
+          <input class="moneyInput red" id="currTotal" type="text" inputmode="numeric" value="0" />
+          <div class="wonSuffix">원</div>
         </div>
-
-        <!-- 2행: 이전 총합 / 누적 총합 -->
-        <div class="topRowTwo">
-          <div>
-            <div class="topFieldLabel">이전 총합</div>
-            <div class="moneyRow">
-              <input class="moneyInput" id="prevTotal" type="text" inputmode="numeric" value="0" />
-              <span class="wonSuffix">원</span>
-            </div>
-          </div>
-
-          <div>
-            <div class="topFieldLabel">누적 총합</div>
-            <div class="moneyRow">
-              <input class="moneyInput" id="sumAllPer" type="text" inputmode="numeric" value="0" />
-              <span class="wonSuffix">원</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 버튼 -->
-        <div class="topBtnRow noPrint">
-          <button class="topBtn" id="refreshTotalsBtn" type="button">새로고침</button>
-          <button class="topBtn" id="undoTotalsBtn" type="button">이전값 되돌리기</button>
-        </div>
-
-        <!-- 계산 시각(기존 id 유지) -->
-        <div class="muted noPrint" id="calcTime" style="text-align:right;"></div>
-
       </div>
+
+      <!-- 2줄: 이전 / 누적 -->
+      <div class="topBlock topRowTwo">
+        <div class="col">
+          <div class="topLabel">이전 총합</div>
+          <div class="moneyRow">
+            <div></div>
+            <input class="moneyInput" id="prevTotal" type="text" inputmode="numeric" value="0" />
+            <div class="wonSuffix">원</div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="topLabel">누적 총합</div>
+          <div class="moneyRow">
+            <div></div>
+            <input class="moneyInput" id="sumAllPer" type="text" inputmode="numeric" value="0" />
+            <div class="wonSuffix">원</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3줄: 버튼 -->
+      <div class="topBtnRow noPrint">
+        <button id="refreshTotalsBtn" type="button">새로고침</button>
+        <button id="undoTotalsBtn" type="button">이전값 되돌리기</button>
+      </div>
+
+      <div class="muted noPrint" id="calcTime"></div>
     </div>
   </div>
 
@@ -471,7 +508,6 @@
     function nfmtInt(x){
       return Math.round(x).toLocaleString("ko-KR");
     }
-
     // ✅ 천원단위 반올림
     function roundTo1000(x){
       const v = Number(x) || 0;
