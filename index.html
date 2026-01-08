@@ -223,6 +223,7 @@
       display:flex;
       gap:10px;
       width:100%;
+      align-items:stretch; /* ✅ 추가: 두 칸 높이/폭 안정 */
     }
     .topRowTwo .topBox{
       flex:1;
@@ -235,8 +236,10 @@
       padding:10px;
     }
 
+    /* ✅✅ 핵심 수정: 라벨/입력칸/원 을 grid로 고정해서 숫자 잘림 방지 */
     .moneyRow{
-      display:flex;
+      display:grid;
+      grid-template-columns: auto minmax(0, 1fr) auto; /* 가운데 입력칸이 항상 최대 확보 */
       align-items:center;
       gap:10px;
     }
@@ -248,6 +251,8 @@
       flex:0 0 auto;
     }
     .moneyInput{
+      width:100%;
+      min-width:0; /* iOS/Safari에서 내용폭으로 쪼그라드는 현상 방지 */
       margin:0;
       padding:10px;
       border-radius:14px;
@@ -257,8 +262,6 @@
       font-size:20px;
       text-align:right;
       color: var(--text);
-      flex:1 1 auto;
-      min-width: 0;
     }
     .moneyInput.red{
       color: var(--danger);
@@ -663,7 +666,7 @@
       const perLine = `개인당: 최종합계 ÷ ${calc.divideBy} = ${won(calc.perShareRounded)}`;
 
       return `[낙지잡이 정산]
-${timeLine hooking}${memoLine}
+${timeLine}${memoLine}
 1) 낙지: ${calc.kg1}kg × ${nfmtInt(calc.price1)}원 = ${won(calc.total1)}
 2) 낙지: ${calc.kg2}kg × ${nfmtInt(calc.price2)}원 = ${won(calc.total2)}
 낙지 총합: ${won(calc.nakjiTotal)}
