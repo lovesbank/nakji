@@ -203,30 +203,50 @@
       font-weight:700;
     }
 
-    /* ✅ 상단 총합: “한 줄” UI */
+    /* ✅ 상단 총합: 3칸 가로로 꽉(줄바꿈 안 함) */
     .topTotalLine{
       background: var(--card2);
       border:1px solid var(--line);
       border-radius:14px;
       padding:14px;
     }
-    .topTotalOneLine{
+    .topTotals3{
       display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
+      gap:8px;
+      width:100%;
+      flex-wrap:nowrap; /* ✅ 무조건 가로 유지 */
     }
-    .topTotalLeft{
+    .topBox{
+      flex:1 1 0;
+      min-width:0;
+      border:1px solid var(--ghostLine);
+      background: var(--ghostBg);
+      border-radius:14px;
+      padding:10px 10px;
+    }
+    .topBoxLabel{
       font-weight:900;
-      font-size:20px;     /* 글자 키움 */
+      font-size:16px;
+      line-height:1.1;
+      margin-bottom:8px;
       white-space:nowrap;
     }
-    .topTotalValue{
+    .topBoxInput{
+      width:100%;
+      margin:0;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--ghostLine);
+      background: var(--card2);
       font-weight:900;
-      font-size:24px;     /* 숫자 더 키움 */
-      color: var(--danger);
-      white-space:nowrap;
+      font-size:22px;
+      text-align:right;
+      color: var(--text); /* ✅ 숫자 기본 검정 */
     }
+    .topBoxInput.red{
+      color: var(--danger); /* ✅ 개인당 총합만 빨강 */
+    }
+
     .topBtns{
       display:flex;
       gap:8px;
@@ -235,17 +255,7 @@
       justify-content:flex-end;
       margin-top:12px;
     }
-    .refreshBtn{
-      width:auto;
-      margin-top:0;
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid var(--ghostLine);
-      background: var(--ghostBg);
-      font-size:14px;
-      font-weight:800;
-      white-space:nowrap;
-    }
+    .refreshBtn,
     .undoBtn{
       width:auto;
       margin-top:0;
@@ -270,12 +280,25 @@
 <body>
   <h1>낙지잡이</h1>
 
-  <!-- ✅ 상단 총합(한줄) + 새로고침 + 되돌리기 -->
+  <!-- ✅ 상단 총합(3칸 가로) + 새로고침 + 되돌리기 -->
   <div class="card">
     <div class="topTotalLine">
-      <div class="topTotalOneLine">
-        <div class="topTotalLeft">개인당 총합</div>
-        <div class="topTotalValue" id="sumAllPer">0원</div>
+      <div class="topTotals3">
+        <div class="topBox">
+          <div class="topBoxLabel">이전 총합</div>
+          <input class="topBoxInput" id="prevTotal" type="text" inputmode="numeric" value="0" />
+        </div>
+
+        <div class="topBox">
+          <div class="topBoxLabel">개인당 총합</div>
+          <input class="topBoxInput red" id="currTotal" type="text" inputmode="numeric" value="0" />
+        </div>
+
+        <div class="topBox">
+          <div class="topBoxLabel">누적 총합</div>
+          <!-- ✅ 누적총합도 입력칸(검정) -->
+          <input class="topBoxInput" id="sumAllPer" type="text" inputmode="numeric" value="0" />
+        </div>
       </div>
 
       <div class="topBtns noPrint">
@@ -397,9 +420,9 @@
 
     const STORAGE_KEY = "nakji_settlements_final_split_v1";
 
-    /* ✅ 상단 “개인당 총합” 누적(확정/이번분) */
-    const TOTALS_KEY = "nakji_totals_v1";        // { prev:number, curr:number }
-    const TOTALS_UNDO_KEY = "nakji_totals_undo_v1"; // { prev:number, curr:number, savedAt:number }
+    /* ✅ 상단 총합 저장 */
+    const TOTALS_KEY = "nakji_totals_v1";           // { prev:number, curr:number, sum:number }
+    const TOTALS_UNDO_KEY = "nakji_totals_undo_v1"; // { prev:number, curr:number, sum:number, savedAt:number }
 
     let kakaoText = "";
     let lastCalc = null;
@@ -470,39 +493,39 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
     }
 
-    /* ✅ 상단 총합 저장/표시 */
+    /* ✅ 상단 총합 로직(3칸 + 누적도 입력칸) */
     function loadTotals(){
       try{
         const raw = localStorage.getItem(TOTALS_KEY);
         const obj = raw ? JSON.parse(raw) : null;
         const prev = Number(obj?.prev ?? 0) || 0;
         const curr = Number(obj?.curr ?? 0) || 0;
-        return { prev, curr };
+        let sum = Number(obj?.sum ?? (prev + curr)) || 0;
+        // 저장값이 없거나 꼬였으면 일관되게 보정
+        if (!Number.isFinite(sum)) sum = prev + curr;
+        return { prev, curr, sum };
       }catch(e){
-        return { prev:0, curr:0 };
+        return { prev:0, curr:0, sum:0 };
       }
     }
-    function saveTotals(prev, curr){
+    function saveTotals(prev, curr, sum){
       localStorage.setItem(TOTALS_KEY, JSON.stringify({
         prev: Number(prev)||0,
-        curr: Number(curr)||0
+        curr: Number(curr)||0,
+        sum: Number(sum)||0
       }));
     }
-    function setTotalsUI(prev, curr){
-      $("sumAllPer").innerText = won((Number(prev)||0) + (Number(curr)||0));
-    }
-    function addToCurrTotal(delta){
-      const t = loadTotals();
-      const nextCurr = (t.curr || 0) + (Number(delta)||0);
-      saveTotals(t.prev||0, nextCurr);
-      setTotalsUI(t.prev||0, nextCurr);
+    function setTotalsUI(prev, curr, sum){
+      $("prevTotal").value = nfmtInt(prev);
+      $("currTotal").value = nfmtInt(curr);
+      $("sumAllPer").value = nfmtInt(sum);
     }
 
-    /* ✅ 되돌리기 스냅샷 */
-    function saveUndoSnapshot(prev, curr){
+    function saveUndoSnapshot(prev, curr, sum){
       localStorage.setItem(TOTALS_UNDO_KEY, JSON.stringify({
         prev: Number(prev)||0,
         curr: Number(curr)||0,
+        sum: Number(sum)||0,
         savedAt: Date.now()
       }));
     }
@@ -514,11 +537,48 @@
         return {
           prev: Number(obj.prev)||0,
           curr: Number(obj.curr)||0,
+          sum: Number(obj.sum)||0,
           savedAt: Number(obj.savedAt)||0
         };
       }catch(e){
         return null;
       }
+    }
+
+    // ✅ prev/curr 수정 → sum 자동 = prev+curr
+    function syncSumFromPrevCurr(){
+      const t = loadTotals();
+      saveUndoSnapshot(t.prev, t.curr, t.sum);
+
+      const prev = uncomma($("prevTotal").value);
+      const curr = uncomma($("currTotal").value);
+      const sum  = prev + curr;
+
+      saveTotals(prev, curr, sum);
+      setTotalsUI(prev, curr, sum);
+    }
+
+    // ✅ sum 수정 → prev 자동 = sum - curr (일관 유지)
+    function syncPrevFromSum(){
+      const t = loadTotals();
+      saveUndoSnapshot(t.prev, t.curr, t.sum);
+
+      const sum  = uncomma($("sumAllPer").value);
+      const curr = uncomma($("currTotal").value);
+      const prev = sum - curr;
+
+      saveTotals(prev, curr, sum);
+      setTotalsUI(prev, curr, sum);
+    }
+
+    function addToCurrTotal(delta){
+      const t = loadTotals();
+      const nextCurr = (t.curr || 0) + (Number(delta)||0);
+      const nextPrev = (t.prev || 0);
+      const nextSum  = nextPrev + nextCurr;
+
+      saveTotals(nextPrev, nextCurr, nextSum);
+      setTotalsUI(nextPrev, nextCurr, nextSum);
     }
 
     function ensureMemoDefault(){
@@ -761,7 +821,7 @@ ${perLine}`;
       saveHistory(list.slice(0, 50));
       renderHistory();
 
-      /* ✅ 저장하면 상단 “개인당 총합”에 자동 누적(이번분) */
+      /* ✅ 저장하면 상단 “개인당 총합”에 자동 누적 */
       addToCurrTotal(Number(lastCalc.perShareRounded) || 0);
 
       alert("저장 완료!");
@@ -898,24 +958,23 @@ ${perLine}`;
       if (lastCalc) calculate();
     }
 
-    /* ✅ 새로고침: 확인창 → (확정=prev)에 누적시키고 이번분=0 */
+    /* ✅ 새로고침: (prev+curr)=sum으로 확정시키고 curr=0, sum도 prev+0으로 맞춤 */
     function refreshTotals(){
-      const ok = confirm("정말 새로고침할까요?\n(이번 총합이 0으로 초기화되고, 누적은 확정으로 넘어갑니다)");
+      const ok = confirm("정말 새로고침할까요?\n(개인당 총합이 0으로 초기화되고, 누적은 이전 총합으로 확정됩니다)");
       if (!ok) return;
 
       const t = loadTotals();
-
-      // 되돌리기용 스냅샷 저장
-      saveUndoSnapshot(t.prev || 0, t.curr || 0);
+      saveUndoSnapshot(t.prev, t.curr, t.sum);
 
       const nextPrev = (t.prev || 0) + (t.curr || 0);
       const nextCurr = 0;
+      const nextSum  = nextPrev + nextCurr;
 
-      saveTotals(nextPrev, nextCurr);
-      setTotalsUI(nextPrev, nextCurr);
+      saveTotals(nextPrev, nextCurr, nextSum);
+      setTotalsUI(nextPrev, nextCurr, nextSum);
     }
 
-    /* ✅ 이전값 되돌리기: 새로고침 잘못 눌렀을 때 복구 */
+    /* ✅ 이전값 되돌리기 */
     function undoTotals(){
       const snap = loadUndoSnapshot();
       if (!snap){
@@ -925,8 +984,8 @@ ${perLine}`;
       const ok = confirm("이전 값으로 되돌릴까요?");
       if (!ok) return;
 
-      saveTotals(snap.prev || 0, snap.curr || 0);
-      setTotalsUI(snap.prev || 0, snap.curr || 0);
+      saveTotals(snap.prev || 0, snap.curr || 0, snap.sum || ((snap.prev||0)+(snap.curr||0)));
+      setTotalsUI(snap.prev || 0, snap.curr || 0, snap.sum || ((snap.prev||0)+(snap.curr||0)));
     }
 
     $("calcBtn").addEventListener("click", calculate);
@@ -957,6 +1016,15 @@ ${perLine}`;
     attachCommaInput($("fuelUnit"));
     attachCommaInput($("food"));
 
+    /* ✅ 상단 3칸 입력 콤마 + 동기화(수정도 되돌리기 가능) */
+    attachCommaInput($("prevTotal"));
+    attachCommaInput($("currTotal"));
+    attachCommaInput($("sumAllPer"));
+
+    $("prevTotal").addEventListener("blur", syncSumFromPrevCurr);
+    $("currTotal").addEventListener("blur", syncSumFromPrevCurr);
+    $("sumAllPer").addEventListener("blur", syncPrevFromSum);
+
     $("refreshTotalsBtn").addEventListener("click", refreshTotals);
     $("undoTotalsBtn").addEventListener("click", undoTotals);
 
@@ -964,7 +1032,7 @@ ${perLine}`;
 
     /* ✅ 첫 로드시 상단 총합 복원 */
     const t0 = loadTotals();
-    setTotalsUI(t0.prev, t0.curr);
+    setTotalsUI(t0.prev, t0.curr, t0.sum);
 
     $("divideBy").value = 4.5;
   </script>
