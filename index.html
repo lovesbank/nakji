@@ -109,6 +109,11 @@
     .btnRow button{ margin-top:0; width:100%; }
     .btnRow.three button{ width: calc(33.333% - 6.66px); }
     .btnRow.two button{ width: calc(50% - 5px); }
+    @media (max-width: 430px){
+      .btnRow.three button{ width: calc(50% - 5px); }
+      .btnRow.three button:first-child{ width:100%; }
+      .btnRow button{ white-space:nowrap; }
+    }
 
     .result{
       margin-top:14px;
@@ -259,9 +264,11 @@
       padding-left:6px;
     }
 
+    /* ✅ 이전 총합 / 누적 총합: 위아래 한 줄씩, 칸을 화면 너비만큼 넓게 (억 단위도 안 잘림) */
     .topRowTwo{
       display:flex;
-      gap:14px;
+      flex-direction:column;
+      gap:12px;
     }
     .topRowTwo .col{
       flex:1;
@@ -272,15 +279,14 @@
       padding:12px 12px;
       border-radius:22px;
     }
-    .topRowTwo .moneyInput{ font-size:20px; }
-    .topRowTwo .wonSuffix{ font-size:20px; }
+    .topRowTwo .moneyInput{ font-size:22px; }
+    .topRowTwo .wonSuffix{ font-size:22px; }
 
     @media (max-width: 430px){
       .moneyInput{ font-size:20px; }
       .wonSuffix{ font-size:20px; }
-      .topRowTwo .moneyInput{ font-size:16px; }
-      .topRowTwo .wonSuffix{ font-size:16px; }
-      .topRowTwo{ gap:12px; }
+      .topRowTwo .moneyInput{ font-size:20px; }
+      .topRowTwo .wonSuffix{ font-size:20px; }
       .moneyRow{ gap:6px; padding:12px 12px; }
     }
 
@@ -472,6 +478,7 @@
 
     const TOTALS_KEY = "nakji_totals_v1";
     const TOTALS_UNDO_KEY = "nakji_totals_undo_v1";
+    const SETTLE_MIGRATED_KEY = "nakji_settle_migrated_v1";
 
     let kakaoText = "";
     let lastCalc = null;
@@ -576,11 +583,12 @@
       $("sumAllPer").value = nfmtInt(sum);
     }
 
-    function saveUndoSnapshot(prev, curr, sum){
+    function saveUndoSnapshot(prev, curr, sum, settledIds){
       localStorage.setItem(TOTALS_UNDO_KEY, JSON.stringify({
         prev: Number(prev)||0,
         curr: Number(curr)||0,
         sum: Number(sum)||0,
+        settledIds: Array.isArray(settledIds) ? settledIds : [],
         savedAt: Date.now()
       }));
     }
@@ -593,6 +601,7 @@
           prev: Number(obj.prev)||0,
           curr: Number(obj.curr)||0,
           sum: Number(obj.sum)||0,
+          settledIds: Array.isArray(obj.settledIds) ? obj.settledIds : [],
           savedAt: Number(obj.savedAt)||0
         };
       }catch(e){
@@ -600,22 +609,48 @@
       }
     }
 
-    function recomputeCurrTotalFromHistory(){
+    // ✅ 개인당 금액
+    function perOf(it){
+      return Number(it?.perShareRounded ?? it?.perShare ?? 0) || 0;
+    }
+
+    // ✅ 개인당 총합 = 아직 "새로고침(확정)" 안 된 정산만 더함
+    //    (새로고침으로 이전 총합에 넘어간 정산은 settled:true 표시 → 다시 더하지 않음 = 두 번 더해지는 문제 해결)
+    //    snapshot=false : 앱 열 때는 되돌리기 값을 덮어쓰지 않음
+    function recomputeCurrTotalFromHistory(snapshot = true){
       const list = loadHistory();
       const t = loadTotals();
 
-      saveUndoSnapshot(t.prev, t.curr, t.sum);
-
-      const nextCurr = list.reduce((acc, it) => {
-        const v = Number(it?.perShareRounded ?? it?.perShare ?? 0) || 0;
-        return acc + v;
-      }, 0);
-
+      const nextCurr = list.reduce((acc, it) => acc + (it && !it.settled ? perOf(it) : 0), 0);
       const nextPrev = Number(t.prev || 0);
       const nextSum  = nextPrev + nextCurr;
 
+      if (nextCurr === t.curr && nextSum === t.sum){
+        setTotalsUI(t.prev, t.curr, t.sum);
+        return;
+      }
+      if (snapshot) saveUndoSnapshot(t.prev, t.curr, t.sum);
+
       saveTotals(nextPrev, nextCurr, nextSum);
       setTotalsUI(nextPrev, nextCurr, nextSum);
+    }
+
+    // ✅ 예전 버전에서 쓰던 기록 옮기기 (한 번만)
+    //    저장된 개인당 총합과 맞을 때까지 오래된 정산부터 "확정됨" 표시
+    function migrateSettled(){
+      if (localStorage.getItem(SETTLE_MIGRATED_KEY)) return;
+      const list = loadHistory();
+      const t = loadTotals();
+      if (list.length && list.every(it => !it || it.settled === undefined)){
+        let unsettled = list.reduce((a, it) => a + perOf(it), 0);
+        for (let i = list.length - 1; i >= 0 && unsettled > t.curr; i--){
+          if (!list[i]) continue;
+          list[i] = { ...list[i], settled: true };
+          unsettled -= perOf(list[i]);
+        }
+        saveHistory(list);
+      }
+      localStorage.setItem(SETTLE_MIGRATED_KEY, "1");
     }
 
     function syncSumFromPrevCurr(){
@@ -893,6 +928,7 @@ ${perLine}`;
             ...keep,
             ...lastCalc,
             id: keep.id,            // ✅ id 유지
+            settled: !!keep.settled, // ✅ 확정 여부 유지
             createdAt: nowLabel()   // ✅ 저장 시각 갱신
           };
           saveHistory(list);
@@ -916,6 +952,7 @@ ${perLine}`;
             ...keep2,
             ...lastCalc,
             id: keep2.id,
+            settled: !!keep2.settled,
             createdAt: nowLabel()
           };
           saveHistory(list);
@@ -930,8 +967,8 @@ ${perLine}`;
         }
       }
 
-      // 3순위: 그 외는 새로 저장
-      list.unshift(lastCalc);
+      // 3순위: 그 외는 새로 저장 (새 정산은 아직 확정 전)
+      list.unshift({ ...lastCalc, settled: false });
       saveHistory(list.slice(0, 50));
       renderHistory();
       recomputeCurrTotalFromHistory();
@@ -1119,7 +1156,16 @@ ${perLine}`;
       if (!ok) return;
 
       const t = loadTotals();
-      saveUndoSnapshot(t.prev, t.curr, t.sum);
+
+      // ✅ 지금까지 정산을 "확정됨" 표시 (다시 열어도 두 번 더해지지 않게)
+      const list = loadHistory();
+      const newlySettled = [];
+      list.forEach((it, i) => {
+        if (it && !it.settled){ list[i] = { ...it, settled: true }; newlySettled.push(it.id); }
+      });
+      saveHistory(list);
+
+      saveUndoSnapshot(t.prev, t.curr, t.sum, newlySettled);
 
       const nextPrev = (t.prev || 0) + (t.curr || 0);
       const nextCurr = 0;
@@ -1138,8 +1184,16 @@ ${perLine}`;
       const ok = confirm("이전 값으로 되돌릴까요?");
       if (!ok) return;
 
+      // ✅ 새로고침을 되돌리면 확정 표시도 풀어줌
+      if (snap.settledIds && snap.settledIds.length){
+        const ids = new Set(snap.settledIds);
+        const list = loadHistory().map(it => (it && ids.has(it.id)) ? { ...it, settled: false } : it);
+        saveHistory(list);
+      }
+
       saveTotals(snap.prev || 0, snap.curr || 0, snap.sum || ((snap.prev||0)+(snap.curr||0)));
       setTotalsUI(snap.prev || 0, snap.curr || 0, snap.sum || ((snap.prev||0)+(snap.curr||0)));
+      localStorage.removeItem(TOTALS_UNDO_KEY);   // 같은 되돌리기 두 번 방지
     }
 
     $("calcBtn").addEventListener("click", calculate);
@@ -1186,7 +1240,8 @@ ${perLine}`;
     const t0 = loadTotals();
     setTotalsUI(t0.prev, t0.curr, t0.sum);
 
-    recomputeCurrTotalFromHistory();
+    migrateSettled();
+    recomputeCurrTotalFromHistory(false);   // ✅ 앱 열 때는 되돌리기 값 안 건드림
 
     $("divideBy").value = 4.5;
   </script>
