@@ -438,6 +438,13 @@
       </div>
     </div>
 
+    <div class="row">
+      <div>
+        <label>수협 수수료 (%)</label>
+        <input type="number" id="feeRate" inputmode="decimal" step="0.1" value="5" />
+      </div>
+    </div>
+
     <button class="primary noPrint" id="calcBtn">계산하기</button>
 
     <div class="btnRow three noPrint">
@@ -696,7 +703,7 @@ ${timeLine}${memoLine}
 [경비]
 입감: ${calc.iceBoxes}박스 × ${nfmtInt(calc.iceUnit)}원 = ${won(calc.iceCost)}
 기름값: ${calc.fuelQty} × ${nfmtInt(calc.fuelUnit)}원 = ${won(calc.fuelCost)}
-수협수수료: 낙지 총합의 5% = ${won(calc.coopFee)}
+수협수수료: 낙지 총합의 ${+(((calc.feeRate ?? 0.05) * 100).toFixed(2))}% = ${won(calc.coopFee)}
 부식: ${won(calc.food)}
 총 경비: ${won(calc.totalCost)}
 
@@ -746,7 +753,7 @@ ${perLine}`;
       const food = uncomma($("food").value);
       const divideBy = num($("divideBy").value) || 1;
 
-      const feeRate = 0.05;
+      const feeRate = num($("feeRate").value) / 100;
       const coopFee = nakjiTotal * feeRate;
 
       const totalCost = iceCost + fuelCost + coopFee + food;
@@ -786,7 +793,7 @@ ${perLine}`;
     }
 
     async function copyKakao(){
-      if (!lastCalc) calculate();
+      calculate();
       if (!lastCalc) return;
 
       try{
@@ -798,7 +805,7 @@ ${perLine}`;
     }
 
     function savePDF(){
-      if (!lastCalc) calculate();
+      calculate();
       window.print();
     }
 
@@ -824,7 +831,7 @@ ${perLine}`;
     }
 
     async function buildCanvas(){
-      if (!lastCalc) calculate();
+      calculate();
       if (!lastCalc) return null;
 
       const target = makeCaptureTarget();
@@ -913,7 +920,7 @@ ${perLine}`;
 
     // ✅✅✅ 저장: 불러온 건은 "원래 자리"에 무조건 덮어쓰기
     function saveCurrent(){
-      if (!lastCalc) calculate();
+      calculate();
       if (!lastCalc) return;
 
       const list = loadHistory();
@@ -1024,6 +1031,7 @@ ${perLine}`;
 
       $("food").value = nfmtInt(calc.food ?? 0);
       $("divideBy").value = (calc.divideBy ?? 4.5);
+      $("feeRate").value = +(((calc.feeRate ?? 0.05) * 100).toFixed(2));
 
       const nakjiTotal = (calc.nakjiTotal ?? ((calc.total1 ?? 0) + (calc.total2 ?? 0)));
       const coopFee = (calc.coopFee ?? (nakjiTotal * 0.05));
