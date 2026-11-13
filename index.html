@@ -318,6 +318,43 @@
       .card{ border:none; background:transparent; }
       .result{ border:1px solid #999; }
     }
+    /* ── 칸 색 (그룹별로 다르게, 레이아웃·기능은 그대로) ── */
+    input{ transition: box-shadow .15s; }
+    #memo{ background: color-mix(in srgb, #ff2d55 14%, var(--ghostBg)); border: 1.5px solid #ff2d55; }
+    #memo:focus{ box-shadow: 0 0 0 3px color-mix(in srgb, #ff2d55 30%, transparent); }
+    #kg1, #price1, #kg2, #price2{ background: color-mix(in srgb, #0a84ff 14%, var(--ghostBg)); border: 1.5px solid #0a84ff; }
+    #kg1, #price1, #kg2, #price2:focus{ box-shadow: 0 0 0 3px color-mix(in srgb, #0a84ff 30%, transparent); }
+    #iceBoxes, #iceUnit{ background: color-mix(in srgb, #34c759 14%, var(--ghostBg)); border: 1.5px solid #34c759; }
+    #iceBoxes, #iceUnit:focus{ box-shadow: 0 0 0 3px color-mix(in srgb, #34c759 30%, transparent); }
+    #fuelQty, #fuelUnit{ background: color-mix(in srgb, #ff9500 14%, var(--ghostBg)); border: 1.5px solid #ff9500; }
+    #fuelQty, #fuelUnit:focus{ box-shadow: 0 0 0 3px color-mix(in srgb, #ff9500 30%, transparent); }
+    #food{ background: color-mix(in srgb, #af52de 14%, var(--ghostBg)); border: 1.5px solid #af52de; }
+    #food:focus{ box-shadow: 0 0 0 3px color-mix(in srgb, #af52de 30%, transparent); }
+    #divideBy{ background: color-mix(in srgb, #30b0c7 14%, var(--ghostBg)); border: 1.5px solid #30b0c7; }
+    #divideBy:focus{ box-shadow: 0 0 0 3px color-mix(in srgb, #30b0c7 30%, transparent); }
+    div:has(> #memo) > label{ color: #ff2d55; }
+    div:has(> #kg1) > label{ color: #0a84ff; }
+    div:has(> #price1) > label{ color: #0a84ff; }
+    div:has(> #kg2) > label{ color: #0a84ff; }
+    div:has(> #price2) > label{ color: #0a84ff; }
+    div:has(> #iceBoxes) > label{ color: #34c759; }
+    div:has(> #iceUnit) > label{ color: #34c759; }
+    div:has(> #fuelQty) > label{ color: #ff9500; }
+    div:has(> #fuelUnit) > label{ color: #ff9500; }
+    div:has(> #food) > label{ color: #af52de; }
+    div:has(> #divideBy) > label{ color: #30b0c7; }
+    .titleSm{ color: var(--text); }
+    .stepper .stepBtn{ border-color: #30b0c7; color: #30b0c7; }
+    .moneyRow{ background: color-mix(in srgb, #ffcc00 10%, var(--ghostBg)); }
+
+    /* ── 맨 위 총합 3칸 색 (숨기지 않음) ── */
+    .moneyRow:has(#currTotal){ background: color-mix(in srgb, #ff3b30 14%, var(--ghostBg)); border: 1.5px solid #ff3b30; }
+    .moneyRow:has(#prevTotal){ background: color-mix(in srgb, #64d2ff 18%, var(--ghostBg)); border: 1.5px solid #64d2ff; }
+    .moneyRow:has(#sumAllPer){ background: color-mix(in srgb, #ffd60a 22%, var(--ghostBg)); border: 1.5px solid #ffd60a; }
+    .topBlock:has(#currTotal) .topLabel{ color: #ff3b30; }
+    .topBlock:has(#prevTotal) .topLabel{ color: #0a84ff; }
+    .topBlock:has(#sumAllPer) .topLabel{ color: #b38600; }
+
   </style>
 </head>
 
@@ -435,13 +472,6 @@
           <input type="number" id="divideBy" inputmode="decimal" step="0.5" value="4.5" />
           <button class="stepBtn" id="divUpBtn" type="button">+</button>
         </div>
-      </div>
-    </div>
-
-    <div class="row">
-      <div>
-        <label>수협 수수료 (%)</label>
-        <input type="number" id="feeRate" inputmode="decimal" step="0.1" value="5" />
       </div>
     </div>
 
@@ -703,7 +733,7 @@ ${timeLine}${memoLine}
 [경비]
 입감: ${calc.iceBoxes}박스 × ${nfmtInt(calc.iceUnit)}원 = ${won(calc.iceCost)}
 기름값: ${calc.fuelQty} × ${nfmtInt(calc.fuelUnit)}원 = ${won(calc.fuelCost)}
-수협수수료: 낙지 총합의 ${+(((calc.feeRate ?? 0.05) * 100).toFixed(2))}% = ${won(calc.coopFee)}
+수협수수료: 낙지 총합의 5% = ${won(calc.coopFee)}
 부식: ${won(calc.food)}
 총 경비: ${won(calc.totalCost)}
 
@@ -753,7 +783,7 @@ ${perLine}`;
       const food = uncomma($("food").value);
       const divideBy = num($("divideBy").value) || 1;
 
-      const feeRate = num($("feeRate").value) / 100;
+      const feeRate = 0.05;
       const coopFee = nakjiTotal * feeRate;
 
       const totalCost = iceCost + fuelCost + coopFee + food;
@@ -1031,7 +1061,6 @@ ${perLine}`;
 
       $("food").value = nfmtInt(calc.food ?? 0);
       $("divideBy").value = (calc.divideBy ?? 4.5);
-      $("feeRate").value = +(((calc.feeRate ?? 0.05) * 100).toFixed(2));
 
       const nakjiTotal = (calc.nakjiTotal ?? ((calc.total1 ?? 0) + (calc.total2 ?? 0)));
       const coopFee = (calc.coopFee ?? (nakjiTotal * 0.05));
